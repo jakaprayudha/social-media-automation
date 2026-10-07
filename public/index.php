@@ -33,7 +33,7 @@ function redirectTo(string $url): never
 
 try {
     $app = bootstrap();
-    $basePath = rtrim((string) parse_url($app->baseUrl, PHP_URL_PATH), '/');
+    $basePath = $app->basePath();
     $requestPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
     if (!in_array($requestPath, [$basePath . '/', $basePath . '/index.php', $basePath === '' ? '/' : $basePath], true)) {
         http_response_code(404);

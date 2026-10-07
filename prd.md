@@ -1,7 +1,7 @@
 # PRD — Social Media Automation
 
 **Status:** Draft untuk validasi  
-**Versi:** 1.2  
+**Versi:** 1.3  
 **Tanggal:** 7 Oktober 2026  
 **Pemilik produk:** Perusahaan/Marketing  
 **Bahasa produk:** Indonesia  
@@ -84,6 +84,7 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 - Bila SMTP belum dikonfigurasi, halaman menampilkan layanan belum tersedia. Kegagalan pengiriman dicatat, mendapat maksimum 5 upaya, lalu berstatus gagal yang dapat diperiksa operator; payload dibuang pada status terminal.
 - Development boleh menggunakan file email privat untuk pengujian, ditandai jelas dan dilarang pada UAT/production. SMTP nyata dan cron harus diverifikasi sebelum client menggunakan pemulihan akun.
 - Halaman berbahasa Indonesia, responsif, memakai aset lokal, dapat digunakan tanpa JavaScript, dan menyediakan label, fokus keyboard, error, serta status submit yang dapat diakses.
+- Development mendukung Laravel Herd maupun PHP built-in server. URL aset, form, navigasi, dan redirect harus same-origin dengan tetap mendukung subdirektori; URL absolut dalam email reset memakai `base_url` kanonis yang dikonfigurasi, bukan Host header dari request. Kebijakan CSP tidak dilonggarkan untuk mengatasi perbedaan domain lokal.
 - Token/password tidak masuk log aplikasi. Query token pada URL harus dikecualikan dari access log, proxy, APM, dan analytics; tidak ada resource pihak ketiga pada halaman autentikasi.
 - Uji penerimaan tahap ini mencakup login valid/invalid, CSRF, batas percobaan, expiry session, reset kedaluwarsa/dipakai ulang/paralel, pencabutan session lain, kegagalan SMTP, dan penolakan akses HTTP ke file privat.
 
@@ -396,5 +397,6 @@ MVP dinyatakan siap untuk pilot ketika tiga perusahaan terkonfigurasi, hak akses
 | 1.0 | 7 Oktober 2026 | Draft awal kebutuhan editorial, AI, approval, dan publikasi lintas platform. |
 | 1.1 | 7 Oktober 2026 | Menetapkan HTML/CSS/JavaScript/PHP/SQLite, UAT shared hosting, production VPS, workflow PHP CLI, Python/n8n opsional, batas SQLite, dan gate production. |
 | 1.2 | 7 Oktober 2026 | Menetapkan tahap pertama khusus login/reset/logout, kebijakan password/session/token, antrean SMTP, pengujian autentikasi, dan batas implementasi sebelum page lainnya. |
+| 1.3 | 7 Oktober 2026 | Mendukung Laravel Herd dan built-in server melalui URL web same-origin; memisahkan URL kanonis email reset dan mempertahankan CSP serta dukungan subdirektori. |
 
 Setiap improvement yang disepakati harus memperbarui bagian terkait, kriteria penerimaan bila berubah, versi dokumen, dan riwayat perubahan ini. Keputusan vendor, akun, atau kebijakan yang belum dikonfirmasi tetap ditandai sebagai terbuka, bukan dianggap selesai.

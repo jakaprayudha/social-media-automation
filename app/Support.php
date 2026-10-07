@@ -128,7 +128,17 @@ final class App
 
     public function url(string $page = 'login'): string
     {
+        return $this->basePath() . '/index.php?page=' . rawurlencode($page);
+    }
+
+    public function absoluteUrl(string $page = 'login'): string
+    {
         return $this->baseUrl . '/index.php?page=' . rawurlencode($page);
+    }
+
+    public function basePath(): string
+    {
+        return rtrim((string) parse_url($this->baseUrl, PHP_URL_PATH), '/');
     }
 
     public function audit(string $action, ?int $userId = null): void

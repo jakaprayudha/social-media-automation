@@ -118,6 +118,16 @@ try {
     $configPath = $directory . '/test-config.php';
     file_put_contents($configPath, '<?php return ' . var_export($config, true) . ';');
     $app = new App($config);
+    check($app->url('forgot') === '/index.php?page=forgot'
+        && $app->absoluteUrl('reset') === $baseUrl . '/index.php?page=reset',
+        'Separate same-origin web URLs from canonical email URLs');
+    $subdirectoryConfig = $config;
+    $subdirectoryConfig['base_url'] = 'https://social.example.test/workspace';
+    $subdirectoryApp = new App($subdirectoryConfig);
+    check($subdirectoryApp->basePath() === '/workspace'
+        && $subdirectoryApp->url('forgot') === '/workspace/index.php?page=forgot'
+        && $subdirectoryApp->absoluteUrl('reset') === 'https://social.example.test/workspace/index.php?page=reset',
+        'Preserve subdirectory in web and canonical URLs');
     $app->migrate();
     check($app->db()->query('PRAGMA integrity_check')->fetchColumn() === 'ok', 'SQLite migration and integrity');
     $app->db()->prepare('INSERT INTO users (name, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, ?)')
@@ -162,6 +172,9 @@ try {
     $stored = $app->db()->query('SELECT token_hash FROM password_resets')->fetchColumn();
     $encrypted = $app->db()->query('SELECT encrypted_payload FROM mail_jobs')->fetchColumn();
     check($stored === hash('sha256', $token) && !str_contains($encrypted, $token), 'Hash reset token and encrypt queued email');
+    $mailPayload = json_decode($app->decrypt($encrypted), true, 8, JSON_THROW_ON_ERROR);
+    check(str_contains($mailPayload['body'], $baseUrl . '/index.php?page=reset&token='),
+        'Reset email contains configured absolute URL');
     check($auth->resetUsable($token) && !$auth->resetUsable('bogus'), 'Validate token shape and validity');
     $summary = (new MailWorker($app))->run();
     check($summary['sent'] === 1 && count(glob($directory . '/mail/*.eml')) === 1, 'Deliver development reset mail to private storage');
@@ -260,6 +273,25 @@ try {
     $resetUrl = $baseUrl . '/index.php?page=reset';
     $response = request($loginUrl, $jar);
     check($response['status'] === 200 && str_contains($response['body'], 'Selamat datang kembali'), 'Render login page');
+    check(str_contains($response['body'], 'href="/assets/auth.css"')
+        && str_contains($response['body'], 'src="/assets/auth.js"')
+        && str_contains($response['body'], 'action="/index.php?page=login"')
+        && !str_contains($response['body'], $baseUrl),
+        'Render same-origin assets, navigation and form actions');
+    $alternateUrlConfig = $config;
+    $alternateUrlConfig['base_url'] = 'http://sosmed-automation.test';
+    file_put_contents($configPath, '<?php return ' . var_export($alternateUrlConfig, true) . ';');
+    $alternateResponse = request($loginUrl, $jar);
+    check($alternateResponse['status'] === 200
+        && str_contains($alternateResponse['body'], 'href="/assets/auth.css"')
+        && !str_contains($alternateResponse['body'], 'sosmed-automation.test'),
+        'Alternate development origin does not leak canonical host into page URLs');
+    $alternateCsrf = csrfFrom(request($forgotUrl, $jar)['body']);
+    $alternatePost = request($forgotUrl, $jar, ['csrf' => $alternateCsrf, 'email' => 'alternate@example.test']);
+    check($alternatePost['status'] === 303
+        && str_contains($alternatePost['headers'], 'Location: /index.php?page=forgot'),
+        'Redirect stays on current origin when canonical host differs');
+    file_put_contents($configPath, '<?php return ' . var_export($config, true) . ';');
     check(str_contains($response['headers'], 'Content-Security-Policy:')
         && str_contains($response['headers'], 'Cache-Control: no-store')
         && str_contains($response['headers'], 'HttpOnly') && str_contains($response['headers'], 'SameSite=Lax'),

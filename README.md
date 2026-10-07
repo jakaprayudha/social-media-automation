@@ -40,6 +40,14 @@ php bin/console.php mail:work
 
 Di development, email hanya ditulis ke `var/mail/reset-*.eml`, bukan dikirim ke internet. File tersebut berformat MIME; teks email/tautan berada dalam body base64. Buka dengan pembaca email lokal yang sesuai. Jangan upload atau bagikan file ini; hapus file development setelah pengujian. Mode `file` ditolak pada testing/production.
 
+### Laravel Herd
+
+Tambahkan/link proyek di Herd dengan domain `sosmed-automation.test`. Pastikan Herd melayani direktori `public`, bukan root source. Aset harus tersedia di `http://sosmed-automation.test/assets/auth.css`.
+
+Pada konfigurasi privat `config/local.php`, gunakan `environment=development` dan `base_url=http://sosmed-automation.test` (atau HTTPS bila site sudah di-secure melalui Herd). `base_url` menentukan URL absolut untuk tautan reset dalam email, bukan memaksa browser berpindah domain.
+
+CSS/JS/favicon, navigasi, form, dan redirect menggunakan path same-origin. Karena itu halaman dapat dibuka normal melalui Herd maupun `http://127.0.0.1:8080` tanpa mengubah konfigurasi setiap berpindah browser URL. Jika memakai subdirektori, path di `base_url` harus sesuai lokasi pemasangan aplikasi. Kebijakan CSP tetap `self`; tidak perlu mengizinkan aset lintas domain. Jalankan cron/`mail:work` tersendiri untuk memproses reset; Herd tidak otomatis menjalankan worker.
+
 ## Shared hosting untuk UAT client
 
 1. Upload basis kode di luar `public_html`; arahkan document root domain/subdomain ke direktori `public`. Bila hosting menggunakan `public_html` tetap, taruh **isi** direktori `public` di sana dan sesuaikan path `require` bootstrap/template ke source privat di `index.php`. Jangan upload seluruh repository ke `public_html`.

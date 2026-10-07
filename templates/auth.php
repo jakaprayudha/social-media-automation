@@ -32,7 +32,7 @@ $description = match (true) {
     $page === 'reset' => 'Pilih kata sandi yang kuat dan berbeda dari yang Anda gunakan di layanan lain.',
     default => 'Masuk untuk melanjutkan ke ruang kerja marketing Anda.',
 };
-$assetBase = $app->baseUrl . '/assets';
+$assetBase = $app->basePath() . '/assets';
 ?>
 <!doctype html>
 <html lang="id">

@@ -19,11 +19,12 @@ final class Auth
         ini_set('session.gc_maxlifetime', (string) $this->app->config['session_lifetime_seconds']);
         session_save_path($this->app->storage . '/sessions');
         session_name('ruang_social_session');
-        $path = parse_url($this->app->baseUrl, PHP_URL_PATH) ?: '';
+        $path = $this->app->basePath();
         session_set_cookie_params([
             'lifetime' => 0,
             'path' => rtrim($path, '/') . '/',
-            'secure' => str_starts_with($this->app->baseUrl, 'https://'),
+            'secure' => str_starts_with($this->app->baseUrl, 'https://')
+                || in_array($_SERVER['HTTPS'] ?? '', ['on', '1'], true),
             'httponly' => true,
             'samesite' => 'Lax',
         ]);
@@ -148,7 +149,7 @@ final class Auth
             $db->prepare('INSERT INTO password_resets (user_id, token_hash, expires_at, created_at) VALUES (?, ?, ?, ?)')
                 ->execute([$user['id'], hash('sha256', $token), $expires, $now]);
             $resetId = (int) $db->lastInsertId();
-            $url = $this->app->url('reset') . '&token=' . $token;
+            $url = $this->app->absoluteUrl('reset') . '&token=' . $token;
             $minutes = (int) ceil($this->app->config['reset_lifetime_seconds'] / 60);
             $body = "Permintaan reset kata sandi Ruang Social\n\n"
                 . "Buka tautan berikut untuk membuat kata sandi baru:\n" . $url
