@@ -1,0 +1,2 @@
+# The repository root must never be served. Point the document root at public/.
+Require all denied

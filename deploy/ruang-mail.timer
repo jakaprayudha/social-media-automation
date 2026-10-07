@@ -1,0 +1,10 @@
+[Unit]
+Description=Process Ruang Social reset emails every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+Unit=ruang-mail.service
+
+[Install]
+WantedBy=timers.target
