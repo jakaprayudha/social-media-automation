@@ -1,7 +1,7 @@
 # PRD — Social Media Automation
 
 **Status:** Draft untuk validasi  
-**Versi:** 1.4  
+**Versi:** 1.5  
 **Tanggal:** 7 Oktober 2026  
 **Pemilik produk:** Perusahaan/Marketing  
 **Bahasa produk:** Indonesia  
@@ -92,10 +92,23 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 
 - Setelah login admin sistem diarahkan ke kerangka admin; semua URL menu dilindungi autentikasi dan pemeriksaan role server. Hak akses perusahaan/peran lain tetap belum diimplementasikan pada tahap ini.
 - Sidebar dikelompokkan menjadi: Ruang kerja (Dashboard, Kalender konten, Kampanye); Editorial (Ide & draft konten, Studio AI, Aset media, Template konten, Persetujuan); Publikasi (Antrean & jadwal, Riwayat & kegagalan, Akun kanal); Organisasi (Perusahaan, Profil merek, Pengguna & hak akses); Laporan & sistem (Laporan & ekspor, Metrik engagement, Audit log, Pengaturan).
-- Menu mengarah ke placeholder yang hanya menampilkan judul dan pemberitahuan bahwa isi/fungsi menyusul. Tidak ada statistik, data perusahaan, koneksi, notifikasi, atau tindakan bisnis palsu.
+- Pada tahap sidebar, menu mengarah ke placeholder yang hanya menampilkan judul dan pemberitahuan bahwa isi/fungsi menyusul. Dashboard kemudian diimplementasikan sebagaimana bagian 5.3; menu lain tetap placeholder. Tidak ada statistik, koneksi, notifikasi, atau tindakan bisnis palsu.
 - Metrik engagement diberi label Fase 3, nonaktif, dan tidak menyediakan route aktif. Komentar/DM, iklan, dan fitur di luar PRD tidak ditambahkan.
 - Sidebar memiliki menu aktif, ikon lokal, identitas akun, logout POST+CSRF, dan tombol buka/tutup yang responsif. Navigasi tetap tersedia tanpa JavaScript; menu/section tidak dikenal ditolak, bukan diarahkan diam-diam ke menu lain.
 - Uji penerimaan: tamu/session kedaluwarsa tidak dapat masuk, login mengarah ke shell, semua menu aktif dapat dipilih dengan tepat satu penanda aktif, route fase lanjut/mutasi placeholder ditolak, logout berfungsi, serta tampilan Herd dan mobile tetap normal.
+
+### 5.3 Dashboard admin lintas tiga perusahaan
+
+- Satu admin sistem mengelola Signal Prima Solusi, Netindo Persada Nusantara, dan Mega Data Link secara bersamaan. Dashboard default menampilkan ringkasan semua perusahaan; filter dapat memilih satu perusahaan tanpa perlu logout/login atau mengganti akun admin.
+- Ketiga record perusahaan dibuat satu kali melalui migrasi berversi, zona waktu default Asia/Jakarta. Tidak ada akun sosial, konten, atau statistik demo yang otomatis dimasukkan ke database aplikasi.
+- Dashboard baca-saja menampilkan enam ringkasan: Ide, Draft & revisi (Brief/Draft AI/Perlu Revisi), Menunggu Review, Terjadwal, Terbit, dan Gagal. Hitungan per item konten sepanjang periode, bukan jumlah publikasi per akun atau metrik engagement. Status Disetujui, Sedang Diproses, dan Dibatalkan ditampilkan terpisah agar total dapat direkonsiliasi.
+- Kartu masing-masing perusahaan memuat nama, zona waktu, status, total konten, menunggu review, gagal, dan jumlah akun terhubung/terdaftar per TikTok/Instagram/Facebook Page. Tidak adanya akun ditampilkan sebagai Belum ditambahkan, bukan dianggap koneksi berhasil atau akun yang sudah terputus.
+- Maksimal delapan konten terbaru menampilkan judul, perusahaan, status, pemilik, dan waktu perubahan dalam zona waktu perusahaan. Panel perhatian merangkum review, gagal, dan koneksi akun. Status akun merupakan data tersimpan, bukan klaim pemeriksaan API langsung.
+- Semua panel memakai scope perusahaan yang sama dan satu snapshot database konsisten. Filter tidak dikenal/berbentuk tidak valid ditolak; nilai kosong memakai semua perusahaan hanya bila parameter tidak disertakan atau pilihan Semua perusahaan dipilih.
+- Halaman dapat digunakan tanpa JavaScript melalui form GET filter; layout responsif dan aset/navigasi tetap same-origin untuk Herd/shared hosting/VPS.
+- Hanya admin sistem dengan session aktif yang dapat mengakses dashboard gabungan. Filter adalah alat tampilan, bukan pengganti RBAC; admin perusahaan/editor/approver/viewer dan penugasan akses menyusul sebelum peran tersebut diaktifkan.
+- Schema awal dashboard menambahkan `companies`, `content_items` (company_id dan owner_id wajib), serta `social_accounts`; campaign/variant/approval/job publikasi menyusul melalui migrasi terpisah. Belum ada endpoint untuk membuat/mengedit konten, menghubungkan akun, atau mengubah status Terbit. Publikasi nyata tetap memerlukan validasi dan konfirmasi API sesuai bagian 6.5.
+- Uji penerimaan mencakup data kosong, agregat tiga perusahaan, isolasi semua panel saat difilter, seluruh kategori status, waktu lokal, batas/urutan konten terbaru, escaping, foreign key perusahaan, dan migrasi berulang tanpa duplikasi atau kehilangan akun admin.
 
 ## 6. Ruang lingkup fitur
 
@@ -408,5 +421,6 @@ MVP dinyatakan siap untuk pilot ketika tiga perusahaan terkonfigurasi, hak akses
 | 1.2 | 7 Oktober 2026 | Menetapkan tahap pertama khusus login/reset/logout, kebijakan password/session/token, antrean SMTP, pengujian autentikasi, dan batas implementasi sebelum page lainnya. |
 | 1.3 | 7 Oktober 2026 | Mendukung Laravel Herd dan built-in server melalui URL web same-origin; memisahkan URL kanonis email reset dan mempertahankan CSP serta dukungan subdirektori. |
 | 1.4 | 7 Oktober 2026 | Menambahkan kerangka sidebar admin sesuai kelompok fitur PRD, placeholder tanpa konten/fungsi, proteksi session/role, dan menu Fase 3 nonaktif. |
+| 1.5 | 7 Oktober 2026 | Mengimplementasikan dashboard admin gabungan tiga perusahaan, filter scope konsisten, status konten/akun dari SQLite, kondisi kosong tanpa data palsu, dan schema dasar melalui migrasi berversi. |
 
 Setiap improvement yang disepakati harus memperbarui bagian terkait, kriteria penerimaan bila berubah, versi dokumen, dan riwayat perubahan ini. Keputusan vendor, akun, atau kebijakan yang belum dikonfirmasi tetap ditandai sebagai terbuka, bukan dianggap selesai.

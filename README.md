@@ -5,7 +5,9 @@ Aplikasi internal HTML/CSS/JavaScript + PHP + SQLite untuk Social Media Automati
 ## Cakupan saat ini
 
 - Login, lupa kata sandi, kata sandi baru, dan logout.
-- Setelah login menampilkan kerangka admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Klik menu hanya mengganti judul dan status aktif; isi/fungsi halaman, RBAC per perusahaan, dan fitur konten **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
+- Setelah login menampilkan dashboard admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Menu selain dashboard tetap placeholder; RBAC per perusahaan dan fungsi editorial/publikasi **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
+- Dashboard membaca SQLite: agregat tiga perusahaan atau filter satu perusahaan, enam ringkasan status konten, kartu perusahaan/koneksi akun, maksimal delapan konten terbaru, dan panel perhatian. Angka dihitung per item sepanjang periode, bukan per posting/platform. Status lain juga dicantumkan untuk rekonsiliasi total. Tidak ada akun sosial atau konten demo yang dibuat otomatis.
+- Migrasi `002_dashboard.sql` membuat perusahaan Signal Prima Solusi, Netindo Persada Nusantara, dan Mega Data Link sekali saja beserta tabel dasar konten/akun. Jalankan `php bin/console.php migrate` sebelum membuka dashboard pada instalasi lama, setelah backup konsisten. Migrasi tidak mengganti database atau menghapus admin yang sudah ada. Default kosong akan menampilkan nol/Belum ditambahkan sampai fitur pengisian datanya dibuat.
 - Area admin memerlukan session aktif dan role admin sistem. Sidebar responsif dapat dibuka/ditutup; tanpa JavaScript seluruh menu tetap tersedia. Logout tetap memakai POST + CSRF.
 - Tidak ada pendaftaran publik atau kredensial admin default.
 - Reset menggunakan token acak 256-bit, berlaku 30 menit, sekali pakai. Token disimpan sebagai hash; payload antrean email dienkripsi dengan Sodium.

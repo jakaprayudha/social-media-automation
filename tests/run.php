@@ -135,6 +135,58 @@ try {
     $userId = (int) $app->db()->lastInsertId();
     $app->migrate();
     check((int) $app->db()->query('SELECT COUNT(*) FROM users')->fetchColumn() === 1, 'Migrations preserve existing users');
+    $dashboardService = new Dashboard($app);
+    $emptyDashboard = $dashboardService->snapshot(null);
+    check(count($emptyDashboard['companies']) === 3
+        && array_column($emptyDashboard['companies'], 'name') === ['Signal Prima Solusi', 'Netindo Persada Nusantara', 'Mega Data Link'],
+        'Onboard exactly the three PRD companies without duplicate seeds');
+    check($emptyDashboard['total_content'] === 0 && $emptyDashboard['total_accounts'] === 0
+        && array_sum($emptyDashboard['metrics']) === 0, 'Empty dashboard reports real zeros without demo content/accounts');
+    $companyIds = array_map('intval', array_column($emptyDashboard['companies'], 'id'));
+    foreach ($companyIds as $index => $companyId) {
+        foreach (array_keys(Dashboard::STATUSES) as $status) {
+            for ($copy = 0; $copy <= $index; $copy++) {
+                $app->db()->prepare('INSERT INTO content_items (company_id, owner_id, title, status, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)')->execute([
+                        $companyId, $userId, 'Fixture ' . $companyId . ' ' . $status . ' <script>test</script>',
+                        $status, time(), time() + $index,
+                    ]);
+            }
+        }
+        $app->db()->prepare('INSERT INTO social_accounts (company_id, platform, account_id, display_name,
+            connection_status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+            ->execute([$companyId, 'instagram', 'fixture-' . $companyId, 'Fixture account', $index === 0 ? 'connected' : 'needs_authorization', time(), time()]);
+    }
+    $allDashboard = $dashboardService->snapshot(null);
+    check($allDashboard['total_content'] === 66 && $allDashboard['metrics']['ideas'] === 6
+        && $allDashboard['metrics']['drafts'] === 18 && $allDashboard['metrics']['review'] === 6
+        && $allDashboard['metrics']['scheduled'] === 6 && $allDashboard['metrics']['published'] === 6
+        && $allDashboard['metrics']['failed'] === 6, 'Aggregate all statuses across three companies without multiplying rows');
+    check($allDashboard['total_accounts'] === 3 && $allDashboard['connected_accounts'] === 1,
+        'Connection summary reflects stored account states');
+    foreach ($companyIds as $index => $companyId) {
+        $scoped = $dashboardService->snapshot($companyId);
+        check(count($scoped['visible_companies']) === 1 && $scoped['total_content'] === 11 * ($index + 1)
+            && $scoped['metrics']['drafts'] === 3 * ($index + 1) && $scoped['total_accounts'] === 1
+            && count(array_unique(array_column($scoped['recent_content'], 'company_name'))) === 1,
+            'Isolate counts, channels and recent content for company ' . $companyId);
+    }
+    check(count($allDashboard['recent_content']) === 8
+        && $allDashboard['recent_content'][0]['company_name'] === 'Mega Data Link', 'Bound recent content and sort newest first');
+    check(dashboardTime(0, 'Asia/Jakarta') === '01/01/1970 07:00', 'Display UTC timestamps in company timezone');
+    try {
+        $dashboardService->snapshot(999999);
+        check(false, 'Reject unknown company filter');
+    } catch (InvalidArgumentException) {
+        check(true, 'Reject unknown company filter');
+    }
+    try {
+        $app->db()->prepare('INSERT INTO content_items (company_id, owner_id, title, created_at, updated_at)
+            VALUES (999999, ?, ?, ?, ?)')->execute([$userId, 'Invalid', time(), time()]);
+        check(false, 'Enforce company foreign key on content');
+    } catch (PDOException) {
+        check(true, 'Enforce company foreign key on content');
+    }
     check(passwordProblem('short') !== null && passwordProblem(str_repeat('a', 73)) !== null
         && passwordProblem(str_repeat('a', 72)) === null
         && passwordProblem(str_repeat('é', 37)) !== null, 'Password minimum and bcrypt byte limit');
@@ -308,8 +360,21 @@ try {
     check(request($loginUrl, $jar)['status'] === 303, 'Authenticated login redirects to admin shell');
     $signedIn = request($adminUrl, $jar);
     check($signedIn['status'] === 200 && str_contains($signedIn['body'], 'Menu admin')
-        && str_contains($signedIn['body'], 'PRATINJAU NAVIGASI') && !str_contains($signedIn['body'], 'name="password"'),
-        'Show admin navigation without feature page contents');
+        && str_contains($signedIn['body'], 'ADMIN LINTAS PERUSAHAAN') && !str_contains($signedIn['body'], 'name="password"'),
+        'Show dashboard with protected multi-company admin navigation');
+    check(str_contains($signedIn['body'], 'data-metric="drafts">18</strong>')
+        && str_contains($signedIn['body'], '&lt;script&gt;test&lt;/script&gt;')
+        && !str_contains($signedIn['body'], '<script>test</script>'), 'Render actual aggregate data and escape content titles');
+    foreach ($companyIds as $index => $companyId) {
+        $scopedPage = request($adminUrl . '&company=' . $companyId, $jar);
+        check($scopedPage['status'] === 200
+            && str_contains($scopedPage['body'], 'data-metric="drafts">' . (3 * ($index + 1)) . '</strong>'),
+            'HTTP dashboard company filter ' . $companyId);
+    }
+    check(request($adminUrl . '&company[]=1', $jar)['status'] === 400
+        && request($adminUrl . '&company=invalid', $jar)['status'] === 400
+        && request($adminUrl . '&company=999999', $jar)['status'] === 400,
+        'Reject malformed and unknown company filters');
     $sections = array_merge(...array_values(adminNavigation()));
     foreach ($sections as $key => $item) {
         $menuPage = request($adminUrl . '&section=' . $key, $jar);

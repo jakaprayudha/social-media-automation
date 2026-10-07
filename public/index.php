@@ -96,6 +96,22 @@ try {
             echo 'Menu tidak tersedia.';
             exit;
         }
+        if ($section === 'dashboard') {
+            $companyInput = $_GET['company'] ?? 'all';
+            if (!is_string($companyInput)
+                || ($companyInput !== 'all' && !preg_match('/\A[1-9][0-9]{0,8}\z/', $companyInput))) {
+                http_response_code(400);
+                echo 'Filter perusahaan tidak valid.';
+                exit;
+            }
+            try {
+                $dashboard = (new Dashboard($app))->snapshot($companyInput === 'all' ? null : (int) $companyInput);
+            } catch (InvalidArgumentException) {
+                http_response_code(400);
+                echo 'Perusahaan yang dipilih tidak terdaftar.';
+                exit;
+            }
+        }
     }
     $notice = $_SESSION['notice'] ?? null;
     unset($_SESSION['notice']);
@@ -215,6 +231,9 @@ try {
         $navigation = adminNavigation();
         $sections = array_merge(...array_values($navigation));
         $section = $section ?? 'dashboard';
+        if ($section === 'dashboard' && !isset($dashboard)) {
+            $dashboard = (new Dashboard($app))->snapshot(null);
+        }
         require dirname(__DIR__) . '/templates/admin.php';
     } else {
         require dirname(__DIR__) . '/templates/auth.php';

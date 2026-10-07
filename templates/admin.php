@@ -54,12 +54,16 @@ $title = $sections[$section]['label'];
         <header class="topbar">
             <button class="menu-toggle" type="button" aria-expanded="true" aria-controls="admin-sidebar" aria-label="Tutup menu admin" hidden><?= icon('menu') ?></button>
             <div class="breadcrumb"><span>Ruang kerja</span><span aria-hidden="true">/</span><strong><?= escape($title) ?></strong></div>
-            <span class="shell-badge">PRATINJAU NAVIGASI</span>
+            <span class="shell-badge"><?= $section === 'dashboard' ? 'ADMIN LINTAS PERUSAHAAN' : 'PRATINJAU NAVIGASI' ?></span>
         </header>
         <main id="main-content" tabindex="-1">
             <?php if ($error !== null): ?><p class="error-notice" role="alert"><?= escape($error) ?></p><?php endif ?>
             <?php if ($notice !== null): ?><p class="notice" role="status"><?= escape((string) $notice) ?></p><?php endif ?>
-            <div class="page-heading"><span>ADMIN WORKSPACE</span><h1><?= escape($title) ?></h1><p>Menu sudah tersedia. Isi dan fungsi halaman ini akan dikembangkan pada tahap berikutnya.</p></div>
+            <?php if ($section === 'dashboard'): ?>
+                <?php require __DIR__ . '/dashboard.php'; ?>
+            <?php else: ?>
+                <div class="page-heading"><span>ADMIN WORKSPACE</span><h1><?= escape($title) ?></h1><p>Menu sudah tersedia. Isi dan fungsi halaman ini akan dikembangkan pada tahap berikutnya.</p></div>
+            <?php endif ?>
         </main>
     </div>
 </div>
