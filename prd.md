@@ -1,7 +1,7 @@
 # PRD — Social Media Automation
 
 **Status:** Draft untuk validasi  
-**Versi:** 1.3  
+**Versi:** 1.4  
 **Tanggal:** 7 Oktober 2026  
 **Pemilik produk:** Perusahaan/Marketing  
 **Bahasa produk:** Indonesia  
@@ -73,7 +73,7 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 ### 5.1 Tahap awal: login dan pemulihan akun
 
 - Implementasi dimulai dari halaman login, lupa kata sandi, kata sandi baru, dan logout sebelum fitur/page produk lainnya.
-- Setelah login, tahap awal hanya menampilkan konfirmasi identitas akun dan tombol logout, bukan dashboard atau fitur konten yang belum tersedia.
+- Tahap autentikasi awal menyediakan konfirmasi akun; tahap berikutnya menggantinya dengan kerangka sidebar admin sebagaimana bagian 5.2, tanpa mengaktifkan isi/fungsi page produk.
 - Tidak ada pendaftaran publik atau akun/password default. Admin sistem awal dibuat melalui CLI interaktif yang dilindungi; role dan penugasan perusahaan lainnya menyusul pada fase berikutnya.
 - Login memakai email dan password hash PHP, validasi sisi server, CSRF, pembatasan percobaan, session cookie HttpOnly/SameSite/Secure pada HTTPS, serta rotasi session saat login/logout. Batas awal: 10 percobaan per email dan 30 per IP selama 15 menit; idle session 30 menit dan maksimum 8 jam.
 - Kata sandi baru minimal 12 karakter dan maksimal 72 byte untuk menghindari pemotongan bcrypt. Form konfirmasi password divalidasi server; password tidak ditampilkan ulang setelah error.
@@ -87,6 +87,15 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 - Development mendukung Laravel Herd maupun PHP built-in server. URL aset, form, navigasi, dan redirect harus same-origin dengan tetap mendukung subdirektori; URL absolut dalam email reset memakai `base_url` kanonis yang dikonfigurasi, bukan Host header dari request. Kebijakan CSP tidak dilonggarkan untuk mengatasi perbedaan domain lokal.
 - Token/password tidak masuk log aplikasi. Query token pada URL harus dikecualikan dari access log, proxy, APM, dan analytics; tidak ada resource pihak ketiga pada halaman autentikasi.
 - Uji penerimaan tahap ini mencakup login valid/invalid, CSRF, batas percobaan, expiry session, reset kedaluwarsa/dipakai ulang/paralel, pencabutan session lain, kegagalan SMTP, dan penolakan akses HTTP ke file privat.
+
+### 5.2 Tahap navigasi admin: sidebar tanpa isi page
+
+- Setelah login admin sistem diarahkan ke kerangka admin; semua URL menu dilindungi autentikasi dan pemeriksaan role server. Hak akses perusahaan/peran lain tetap belum diimplementasikan pada tahap ini.
+- Sidebar dikelompokkan menjadi: Ruang kerja (Dashboard, Kalender konten, Kampanye); Editorial (Ide & draft konten, Studio AI, Aset media, Template konten, Persetujuan); Publikasi (Antrean & jadwal, Riwayat & kegagalan, Akun kanal); Organisasi (Perusahaan, Profil merek, Pengguna & hak akses); Laporan & sistem (Laporan & ekspor, Metrik engagement, Audit log, Pengaturan).
+- Menu mengarah ke placeholder yang hanya menampilkan judul dan pemberitahuan bahwa isi/fungsi menyusul. Tidak ada statistik, data perusahaan, koneksi, notifikasi, atau tindakan bisnis palsu.
+- Metrik engagement diberi label Fase 3, nonaktif, dan tidak menyediakan route aktif. Komentar/DM, iklan, dan fitur di luar PRD tidak ditambahkan.
+- Sidebar memiliki menu aktif, ikon lokal, identitas akun, logout POST+CSRF, dan tombol buka/tutup yang responsif. Navigasi tetap tersedia tanpa JavaScript; menu/section tidak dikenal ditolak, bukan diarahkan diam-diam ke menu lain.
+- Uji penerimaan: tamu/session kedaluwarsa tidak dapat masuk, login mengarah ke shell, semua menu aktif dapat dipilih dengan tepat satu penanda aktif, route fase lanjut/mutasi placeholder ditolak, logout berfungsi, serta tampilan Herd dan mobile tetap normal.
 
 ## 6. Ruang lingkup fitur
 
@@ -398,5 +407,6 @@ MVP dinyatakan siap untuk pilot ketika tiga perusahaan terkonfigurasi, hak akses
 | 1.1 | 7 Oktober 2026 | Menetapkan HTML/CSS/JavaScript/PHP/SQLite, UAT shared hosting, production VPS, workflow PHP CLI, Python/n8n opsional, batas SQLite, dan gate production. |
 | 1.2 | 7 Oktober 2026 | Menetapkan tahap pertama khusus login/reset/logout, kebijakan password/session/token, antrean SMTP, pengujian autentikasi, dan batas implementasi sebelum page lainnya. |
 | 1.3 | 7 Oktober 2026 | Mendukung Laravel Herd dan built-in server melalui URL web same-origin; memisahkan URL kanonis email reset dan mempertahankan CSP serta dukungan subdirektori. |
+| 1.4 | 7 Oktober 2026 | Menambahkan kerangka sidebar admin sesuai kelompok fitur PRD, placeholder tanpa konten/fungsi, proteksi session/role, dan menu Fase 3 nonaktif. |
 
 Setiap improvement yang disepakati harus memperbarui bagian terkait, kriteria penerimaan bila berubah, versi dokumen, dan riwayat perubahan ini. Keputusan vendor, akun, atau kebijakan yang belum dikonfirmasi tetap ditandai sebagai terbuka, bukan dianggap selesai.

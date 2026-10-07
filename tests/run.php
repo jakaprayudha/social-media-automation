@@ -271,6 +271,8 @@ try {
     $loginUrl = $baseUrl . '/index.php?page=login';
     $forgotUrl = $baseUrl . '/index.php?page=forgot';
     $resetUrl = $baseUrl . '/index.php?page=reset';
+    $adminUrl = $baseUrl . '/index.php?page=admin';
+    check(request($adminUrl, $directory . '/guest-cookies.txt')['status'] === 303, 'Admin menu requires authenticated session');
     $response = request($loginUrl, $jar);
     check($response['status'] === 200 && str_contains($response['body'], 'Selamat datang kembali'), 'Render login page');
     check(str_contains($response['body'], 'href="/assets/auth.css"')
@@ -303,12 +305,32 @@ try {
         'Show server-side credential error');
     check(request($loginUrl, $jar, ['csrf' => $csrf, 'email' => 'admin@example.test', 'password' => 'concurrent-passphrase-2026'])['status'] === 303,
         'Successful login redirects');
-    $signedIn = request($loginUrl, $jar);
-    check(str_contains($signedIn['body'], 'Anda sudah masuk') && !str_contains($signedIn['body'], 'name="password"'),
-        'Show authenticated confirmation only, without other product features');
+    check(request($loginUrl, $jar)['status'] === 303, 'Authenticated login redirects to admin shell');
+    $signedIn = request($adminUrl, $jar);
+    check($signedIn['status'] === 200 && str_contains($signedIn['body'], 'Menu admin')
+        && str_contains($signedIn['body'], 'PRATINJAU NAVIGASI') && !str_contains($signedIn['body'], 'name="password"'),
+        'Show admin navigation without feature page contents');
+    $sections = array_merge(...array_values(adminNavigation()));
+    foreach ($sections as $key => $item) {
+        $menuPage = request($adminUrl . '&section=' . $key, $jar);
+        if ($item['later'] ?? false) {
+            check($menuPage['status'] === 404 && str_contains($signedIn['body'], 'aria-disabled="true"'),
+                'Future metrics is visibly disabled and not routable');
+        } else {
+            check($menuPage['status'] === 200 && str_contains($menuPage['body'], '<h1>' . escape($item['label']) . '</h1>')
+                && substr_count($menuPage['body'], 'aria-current="page"') === 1,
+                'Render active admin menu: ' . $key);
+        }
+    }
+    check(request($adminUrl . '&section=unknown', $jar)['status'] === 404, 'Reject unknown admin section');
+    check(request($adminUrl, $jar, ['csrf' => csrfFrom($signedIn['body'])])['status'] === 405,
+        'Admin placeholders do not accept feature mutations');
+    check(request($baseUrl . '/assets/admin.css', $jar)['status'] === 200
+        && request($baseUrl . '/assets/admin.js', $jar)['status'] === 200, 'Serve same-origin admin assets');
     check(request($baseUrl . '/index.php?page=logout', $jar)['status'] === 405, 'Logout cannot be triggered by GET');
     $csrf = csrfFrom($signedIn['body']);
     check(request($baseUrl . '/index.php?page=logout', $jar, ['csrf' => $csrf])['status'] === 303, 'Logout requires valid POST and CSRF');
+    check(request($adminUrl, $jar)['status'] === 303, 'Logged-out session cannot access admin shell');
     $app->db()->exec('DELETE FROM rate_limits');
     $forgot = request($forgotUrl, $jar);
     $csrf = csrfFrom($forgot['body']);

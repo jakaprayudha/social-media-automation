@@ -5,7 +5,8 @@ Aplikasi internal HTML/CSS/JavaScript + PHP + SQLite untuk Social Media Automati
 ## Cakupan saat ini
 
 - Login, lupa kata sandi, kata sandi baru, dan logout.
-- Setelah login hanya menampilkan konfirmasi akun. Dashboard, RBAC per perusahaan, dan fitur konten **belum diimplementasikan**.
+- Setelah login menampilkan kerangka admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Klik menu hanya mengganti judul dan status aktif; isi/fungsi halaman, RBAC per perusahaan, dan fitur konten **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
+- Area admin memerlukan session aktif dan role admin sistem. Sidebar responsif dapat dibuka/ditutup; tanpa JavaScript seluruh menu tetap tersedia. Logout tetap memakai POST + CSRF.
 - Tidak ada pendaftaran publik atau kredensial admin default.
 - Reset menggunakan token acak 256-bit, berlaku 30 menit, sekali pakai. Token disimpan sebagai hash; payload antrean email dienkripsi dengan Sodium.
 - Kata sandi minimal 12 karakter, maksimal 72 byte untuk menghindari truncation bcrypt. Session idle 30 menit dan umur maksimum 8 jam. Reset mencabut seluruh session lama.

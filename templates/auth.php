@@ -1,23 +1,7 @@
 <?php
 declare(strict_types=1);
 
-function icon(string $name, string $class = ''): string
-{
-    $paths = [
-        'layers' => '<path d="m12 3 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 16l9 5 9-5"/>',
-        'arrow' => '<path d="M5 12h14m-6-6 6 6-6 6"/>',
-        'back' => '<path d="M19 12H5m6-6-6 6 6 6"/>',
-        'mail' => '<rect x="3" y="5" width="18" height="14" rx="3"/><path d="m3 7 9 6 9-6"/>',
-        'lock' => '<rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>',
-        'shield' => '<path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z"/><path d="m8 12 3 3 5-6"/>',
-        'eye' => '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
-        'check' => '<path d="m5 12 4 4L19 6"/>',
-        'spark' => '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3Z"/>',
-    ];
-    return '<svg class="icon ' . escape($class) . '" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
-        . ' stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
-        . ($paths[$name] ?? $paths['lock']) . '</svg>';
-}
+require_once __DIR__ . '/icons.php';
 
 $signedIn = $page === 'login' && $user !== null;
 $title = match (true) {

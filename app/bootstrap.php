@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/Support.php';
 require_once __DIR__ . '/Auth.php';
 require_once __DIR__ . '/Mailer.php';
+require_once __DIR__ . '/Navigation.php';
 
 function bootstrap(): App
 {

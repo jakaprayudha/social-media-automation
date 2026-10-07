@@ -62,7 +62,7 @@ try {
         exit;
     }
     $page = $_GET['page'] ?? 'login';
-    if (!is_string($page) || !in_array($page, ['login', 'forgot', 'reset', 'logout'], true)) {
+    if (!is_string($page) || !in_array($page, ['login', 'forgot', 'reset', 'logout', 'admin'], true)) {
         http_response_code(404);
         echo 'Halaman tidak ditemukan.';
         exit;
@@ -70,6 +70,33 @@ try {
     $auth = new Auth($app);
     $auth->startSession();
     $user = $auth->user();
+    if ($page === 'login' && $user !== null && $method === 'GET') {
+        redirectTo($app->url('admin'));
+    }
+    if ($page === 'admin') {
+        if ($user === null) {
+            redirectTo($app->url());
+        }
+        if ($user['role'] !== 'system_admin') {
+            http_response_code(403);
+            echo 'Anda tidak memiliki akses admin sistem.';
+            exit;
+        }
+        if ($method !== 'GET') {
+            header('Allow: GET');
+            http_response_code(405);
+            echo 'Menu admin hanya menerima navigasi GET.';
+            exit;
+        }
+        $navigation = adminNavigation();
+        $sections = array_merge(...array_values($navigation));
+        $section = $_GET['section'] ?? 'dashboard';
+        if (!is_string($section) || !isset($sections[$section]) || ($sections[$section]['later'] ?? false)) {
+            http_response_code(404);
+            echo 'Menu tidak tersedia.';
+            exit;
+        }
+    }
     $notice = $_SESSION['notice'] ?? null;
     unset($_SESSION['notice']);
     $error = null;
@@ -118,7 +145,7 @@ try {
             } else {
                 $result = $auth->login($email, $password, $ip);
                 if ($result === 'ok') {
-                    redirectTo($app->url());
+                    redirectTo($app->url('admin'));
                 }
                 http_response_code($result === 'rate_limited' ? 429 : 422);
                 if ($result === 'rate_limited') {
@@ -184,7 +211,14 @@ try {
         }
     }
     $csrf = $auth->csrf();
-    require dirname(__DIR__) . '/templates/auth.php';
+    if ($page === 'admin' || ($page === 'login' && $user !== null)) {
+        $navigation = adminNavigation();
+        $sections = array_merge(...array_values($navigation));
+        $section = $section ?? 'dashboard';
+        require dirname(__DIR__) . '/templates/admin.php';
+    } else {
+        require dirname(__DIR__) . '/templates/auth.php';
+    }
 } catch (InvalidArgumentException $error) {
     http_response_code(400);
     echo 'Form tidak valid. Muat ulang halaman dan coba kembali.';
