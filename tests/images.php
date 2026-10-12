@@ -4,6 +4,7 @@ declare(strict_types=1);
 final class ImageFixture implements AiImageProvider
 {
     public int $calls = 0;
+    public array $requests = [];
 
     public function __construct(private readonly bool $fail = false)
     {
@@ -23,6 +24,7 @@ final class ImageFixture implements AiImageProvider
     public function generate(array $image): array
     {
         $this->calls++;
+        $this->requests[] = $image;
         if ($this->fail) {
             throw new AiFailure('quota');
         }
@@ -80,6 +82,30 @@ function testAiImages(App $app, int $userId, string $adminUrl, string $jar): voi
             'Generated image persists privately with exact requested ratio ' . $ratio);
     }
     $id = $imageIds[0];
+    $savedDraft = (new AiStudio($app))->snapshot(null, $draftId)['detail'];
+    $expectedVariant = array_values(array_filter($savedDraft['result']['variants'],
+        fn (array $variant): bool => $variant['platform'] === 'instagram'))[0];
+    $captured = $fixture->requests[0];
+    check($captured['platform_result'] === $expectedVariant
+        && $captured['title'] === $savedDraft['title'] && $captured['brief'] === $savedDraft['brief']
+        && $captured['audience'] === $savedDraft['audience'] && $captured['tone'] === $savedDraft['tone']
+        && $captured['facts'] === $savedDraft['facts'],
+        'Image generation reads every saved platform text field and approved brief context server-side');
+    $contextPayload = GeminiImage::payload($captured);
+    $contextText = $contextPayload['contents'][0]['parts'][0]['text'];
+    $context = json_decode(substr($contextText, strpos($contextText, '{')), true, 32, JSON_THROW_ON_ERROR);
+    check($context['platform_result'] === $expectedVariant && $context['prompt'] === $input['prompt']
+        && !isset($context['creation_key'], $context['owner_id'], $context['model']),
+        'Gemini image request contains exact full platform output without internal credentials or metadata');
+    $firstFile = $service->file($draftId, $id)['path'];
+    $firstBytes = file_get_contents($firstFile);
+    $repeatId = $service->generate($draftId, $userId, array_replace($input, [
+        'prompt' => 'Revised scene for the same message', 'creation_key' => bin2hex(random_bytes(32)),
+    ]), true, $fixture);
+    check($repeatId !== $id && file_get_contents($firstFile) === $firstBytes
+        && $fixture->requests[array_key_last($fixture->requests)]['prompt'] === 'Revised scene for the same message'
+        && $fixture->requests[array_key_last($fixture->requests)]['platform_result'] === $expectedVariant,
+        'Regeneration with revised prompt creates a new image preserves previous bytes and retains full context');
     $preview = request($url . '&image=' . $id, $jar);
     check($preview['status'] === 200 && str_contains($preview['headers'], 'Content-Type: image/png')
         && str_contains($preview['headers'], 'inline; filename=')
@@ -130,7 +156,8 @@ function testAiImages(App $app, int $userId, string $adminUrl, string $jar): voi
     $decoded = GeminiImage::decode(json_encode($response, JSON_THROW_ON_ERROR), '4:5');
     check($decoded['width'] === 40 && $decoded['height'] === 50, 'Gemini image adapter decodes and validates binary response');
     $payload = GeminiImage::payload(['prompt' => 'Public brief', 'style' => 'Minimal',
-        'title' => 'Topic', 'brief' => 'Context', 'platform' => 'instagram', 'aspect_ratio' => '4:5']);
+        'title' => 'Topic', 'brief' => 'Context', 'platform' => 'instagram', 'aspect_ratio' => '4:5',
+        'audience' => 'Audience', 'tone' => 'Friendly', 'facts' => '', 'platform_result' => $expectedVariant]);
     check($payload['generationConfig']['imageConfig']['aspectRatio'] === '4:5'
         && $payload['generationConfig']['responseModalities'] === ['TEXT', 'IMAGE'],
         'Gemini image request uses requested aspect ratio and image output modality');
