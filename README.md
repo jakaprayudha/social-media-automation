@@ -5,7 +5,13 @@ Aplikasi internal HTML/CSS/JavaScript + PHP + SQLite untuk Social Media Automati
 ## Cakupan saat ini
 
 - Login, lupa kata sandi, kata sandi baru, dan logout.
-- Setelah login menampilkan dashboard admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Menu selain dashboard tetap placeholder; RBAC per perusahaan dan fungsi editorial/publikasi **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
+- Setelah login menampilkan dashboard admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Menu selain dashboard dan kalender tetap placeholder; RBAC per perusahaan, editor lengkap, dan publikasi **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
+- Kalender konten (`index.php?page=admin&section=calendar`) menampilkan bulan 2000–2099, navigasi bulan, filter perusahaan/status, detail, dan form **Tambah konten** tanpa JavaScript. Konten baru hanya berstatus Ide/Brief dengan perusahaan aktif, pemilik admin yang masuk, format, brief, dan tanggal rencana opsional. Form POST dilindungi CSRF dan token anti-duplikasi; validasi error mempertahankan input.
+- Kalender memakai `scheduled_at` bila ada, selain itu `planned_at` (timestamp UTC). Tanggal rencana bukan jadwal publikasi. Tampilan gabungan memakai Asia/Jakarta; pilihan satu perusahaan memakai zona waktu perusahaan. Input tanggal rencana memakai zona perusahaan, bukan zona browser. Bulan awal mengikuti Asia/Jakarta. Konten tanpa tanggal dihitung terpisah sepanjang periode. Belum ada form edit, AI generatif, atau publikasi otomatis.
+- Klik nomor tanggal atau **+ Tambah** untuk membuka form dengan tanggal terisi pukul 09:00; dengan JavaScript, klik area kosong sel juga bisa dan input lain tetap dipertahankan. Jam yang sudah diisi dipertahankan saat memilih tanggal lain. Tanpa JavaScript, tautan GET membuka form dengan tanggal/perusahaan terpilih; input yang belum disimpan tidak dibawa saat berpindah halaman. Tanggal diinterpretasikan di zona perusahaan yang dipilih pada form.
+- Buka detail konten berstatus **Ide/Brief**, pilih **Hapus konten**, centang konfirmasi, lalu **Ya, hapus konten**. Server memeriksa ulang status dalam transaksi; status lain tidak dapat dihapus. Penghapusan memakai POST+CSRF, menyimpan `deleted_at`/`deleted_by` dan audit, serta menyembunyikan konten dari kalender, hitungan tanpa tanggal, dan semua panel dashboard. Unique key ide peringatan dipertahankan agar generator tidak membuat ulang ide yang dihapus. Tidak tersedia pemulihan dari UI.
+- Migrasi `003_calendar_ideas.sql` menambahkan 8 tanggal peringatan tetap: Pendidikan Nasional, Kemerdekaan RI, Batik Nasional, Sumpah Pemuda, Perempuan Internasional, Lingkungan Hidup Sedunia, Keterampilan Pemuda Sedunia, dan Perdamaian Internasional. Katalog terkurasi ini bukan daftar lengkap hari libur; setiap peringatan memiliki sumber (Wikipedia untuk nasional, PBB untuk internasional) dan tanggal pemeriksaan. Hari raya bertanggal berubah dan tema tahunan belum tersedia. Peringatan tetap terlihat meski filter status konten berubah.
+- Ide peringatan dibuat setelah aktivasi: satu per perusahaan aktif/peringatan/tahun, tanggal rencana pukul 09:00 lokal perusahaan, status Ide, tidak disetujui/diterbitkan. Unique index dan transaksi melindungi proses paralel/ulang; perubahan manusia tidak ditimpa. Menjeda otomatisasi tidak menghapus ide lama. Perusahaan nonaktif dilewati; admin pemilik yang nonaktif menyebabkan error, bukan dialihkan diam-diam.
 - Dashboard membaca SQLite: agregat tiga perusahaan atau filter satu perusahaan, enam ringkasan status konten, kartu perusahaan/koneksi akun, maksimal delapan konten terbaru, dan panel perhatian. Angka dihitung per item sepanjang periode, bukan per posting/platform. Status lain juga dicantumkan untuk rekonsiliasi total. Tidak ada akun sosial atau konten demo yang dibuat otomatis.
 - Migrasi `002_dashboard.sql` membuat perusahaan Signal Prima Solusi, Netindo Persada Nusantara, dan Mega Data Link sekali saja beserta tabel dasar konten/akun. Jalankan `php bin/console.php migrate` sebelum membuka dashboard pada instalasi lama, setelah backup konsisten. Migrasi tidak mengganti database atau menghapus admin yang sudah ada. Default kosong akan menampilkan nol/Belum ditambahkan sampai fitur pengisian datanya dibuat.
 - Area admin memerlukan session aktif dan role admin sistem. Sidebar responsif dapat dibuka/ditutup; tanpa JavaScript seluruh menu tetap tersedia. Logout tetap memakai POST + CSRF.
@@ -42,6 +48,41 @@ php bin/console.php mail:work
 ```
 
 Di development, email hanya ditulis ke `var/mail/reset-*.eml`, bukan dikirim ke internet. File tersebut berformat MIME; teks email/tautan berada dalam body base64. Buka dengan pembaca email lokal yang sesuai. Jangan upload atau bagikan file ini; hapus file development setelah pengujian. Mode `file` ditolak pada testing/production.
+
+### Konten dan ide peringatan otomatis
+
+Pada instalasi lama, backup SQLite secara konsisten lalu jalankan `php bin/console.php migrate` (termasuk `004_calendar_delete.sql` sebelum menggunakan penghapusan). Dari kalender, gunakan **Tambah konten** untuk ide/brief manual. **Aktifkan & buat ide tahun ...** menetapkan admin yang masuk sebagai pemilik ide baru dan membuat ide untuk tahun yang sedang dilihat (semua perusahaan aktif, bukan hanya filter terpilih). **Lengkapi ide tahun ...** hanya menambahkan yang belum ada. GET kalender tidak mengubah database.
+
+Alternatif CLI:
+
+```sh
+php bin/console.php calendar:enable EMAIL_ADMIN
+php bin/console.php calendar:generate
+php bin/console.php calendar:generate 2027
+```
+
+Aktivasi CLI membuat ide tahun berjalan berdasarkan Asia/Jakarta. Generator tidak memakai AI atau menebak tema tahunan; brief awal harus dikurasi sebelum publikasi. Bila otomatisasi dijeda, CLI `calendar:generate` tidak membuat ide dan mengembalikan `enabled: false` agar scheduler tidak menganggap penjedaan sebagai kegagalan.
+
+Agar tahun baru/perusahaan baru terisi tanpa membuka halaman, pasang cron harian memakai path PHP dan source absolut sesuai hosting:
+
+```cron
+5 0 * * * /PATH/TO/php /PATH/TO/sosmed-automation/bin/console.php calendar:generate >> /PATH/TO/sosmed-automation/var/logs/calendar-cron.log 2>&1
+```
+
+Cron `mail:work` yang sudah terpasang juga menjalankan generator tahun berjalan sebelum email; tidak perlu memasang kedua cron. Generator aman dijalankan berulang/paralel dan tetap mati bila belum diaktifkan. Status Aktif di UI menunjukkan konfigurasi, bukan bukti cron terpasang; proses terakhir ditampilkan untuk pemeriksaan. Tanpa cron, pengisian hanya terjadi melalui tombol/CLI. Aktivasi lokal tidak otomatis mengaktifkan database UAT/production.
+
+Di Mac development ini, scheduler lokal dipasang melalui LaunchAgent `com.ruangsocial.calendar`, pukul 00:05 zona waktu Mac dan sekali saat login/load. File berada di `~/Library/LaunchAgents/com.ruangsocial.calendar.plist`, menggunakan PHP/source/config absolut. Mac harus menyala dan user login; jadwal yang terlewat saat sleep dijalankan saat bangun. Log privat ada di `var/logs/calendar-launchd.log` dan `calendar-launchd-error.log`. Scheduler ini tidak ikut deployment; hosting/VPS perlu cron sendiri.
+
+```sh
+launchctl print gui/$(id -u)/com.ruangsocial.calendar
+launchctl kickstart gui/$(id -u)/com.ruangsocial.calendar
+```
+
+Tombol **Jeda ide otomatis** menghentikan pembuatan ide, bukan membongkar scheduler. Untuk melepas scheduler lokal tanpa menghapus source/database:
+
+```sh
+launchctl bootout gui/$(id -u) "$HOME/Library/LaunchAgents/com.ruangsocial.calendar.plist"
+```
 
 ### Laravel Herd
 

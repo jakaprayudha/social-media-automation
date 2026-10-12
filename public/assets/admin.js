@@ -21,5 +21,33 @@ if (toggle && sidebar && shell) {
             setExpanded(false);
             toggle.focus();
         }
+
+    });
+}
+
+const contentCreate = document.getElementById('content-create');
+const plannedAt = document.getElementById('content-planned-at');
+const contentTitle = document.getElementById('content-title');
+
+if (contentCreate && plannedAt && contentTitle) {
+    const openContentForm = (date) => {
+        const existingTime = plannedAt.value.split('T')[1] || '09:00';
+        plannedAt.value = `${date}T${existingTime}`;
+        contentCreate.open = true;
+        contentCreate.scrollIntoView({ block: 'start' });
+        contentTitle.focus({ preventScroll: true });
+    };
+    document.querySelectorAll('[data-add-date]').forEach((link) => {
+        link.addEventListener('click', (event) => {
+            if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            openContentForm(link.dataset.addDate);
+        });
+    });
+    document.querySelectorAll('[data-calendar-date]').forEach((cell) => {
+        cell.addEventListener('click', (event) => {
+            if (event.target !== cell) return;
+            openContentForm(cell.dataset.calendarDate);
+        });
     });
 }

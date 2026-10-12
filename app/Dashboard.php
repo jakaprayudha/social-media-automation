@@ -53,7 +53,8 @@ final class Dashboard
             $scope = $companyId === null ? '' : ' WHERE company_id = ?';
             $parameters = $companyId === null ? [] : [$companyId];
             $counts = $db->prepare('SELECT company_id, status, COUNT(*) AS count FROM content_items'
-                . $scope . ' GROUP BY company_id, status');
+                . ' WHERE deleted_at IS NULL' . ($companyId === null ? '' : ' AND company_id = ?')
+                . ' GROUP BY company_id, status');
             $counts->execute($parameters);
             $statusTotals = array_fill_keys(array_keys(self::STATUSES), 0);
             $byCompany = [];
@@ -88,7 +89,7 @@ final class Dashboard
             $recent = $db->prepare('SELECT c.id, c.title, c.status, c.updated_at, co.name AS company_name,
                 co.timezone, u.name AS owner_name FROM content_items c
                 JOIN companies co ON co.id = c.company_id JOIN users u ON u.id = c.owner_id'
-                . ($companyId === null ? '' : ' WHERE c.company_id = ?')
+                . ' WHERE c.deleted_at IS NULL' . ($companyId === null ? '' : ' AND c.company_id = ?')
                 . ' ORDER BY c.updated_at DESC, c.id DESC LIMIT 8');
             $recent->execute($parameters);
             $data = [

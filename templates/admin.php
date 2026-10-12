@@ -12,8 +12,8 @@ $title = $sections[$section]['label'];
     <meta name="robots" content="noindex, nofollow">
     <title><?= escape($title) ?> — Ruang Social</title>
     <link rel="icon" href="<?= escape($assetBase) ?>/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="<?= escape($assetBase) ?>/admin.css">
-    <script src="<?= escape($assetBase) ?>/admin.js" defer></script>
+    <link rel="stylesheet" href="<?= escape($assetBase) ?>/admin.css?v=<?= filemtime(dirname(__DIR__) . '/public/assets/admin.css') ?>">
+    <script src="<?= escape($assetBase) ?>/admin.js?v=<?= filemtime(dirname(__DIR__) . '/public/assets/admin.js') ?>" defer></script>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Lewati navigasi</a>
@@ -54,13 +54,15 @@ $title = $sections[$section]['label'];
         <header class="topbar">
             <button class="menu-toggle" type="button" aria-expanded="true" aria-controls="admin-sidebar" aria-label="Tutup menu admin" hidden><?= icon('menu') ?></button>
             <div class="breadcrumb"><span>Ruang kerja</span><span aria-hidden="true">/</span><strong><?= escape($title) ?></strong></div>
-            <span class="shell-badge"><?= $section === 'dashboard' ? 'ADMIN LINTAS PERUSAHAAN' : 'PRATINJAU NAVIGASI' ?></span>
+            <span class="shell-badge"><?= in_array($section, ['dashboard', 'calendar'], true) ? 'ADMIN LINTAS PERUSAHAAN' : 'PRATINJAU NAVIGASI' ?></span>
         </header>
         <main id="main-content" tabindex="-1">
             <?php if ($error !== null): ?><p class="error-notice" role="alert"><?= escape($error) ?></p><?php endif ?>
             <?php if ($notice !== null): ?><p class="notice" role="status"><?= escape((string) $notice) ?></p><?php endif ?>
             <?php if ($section === 'dashboard'): ?>
                 <?php require __DIR__ . '/dashboard.php'; ?>
+            <?php elseif ($section === 'calendar'): ?>
+                <?php require __DIR__ . '/calendar.php'; ?>
             <?php else: ?>
                 <div class="page-heading"><span>ADMIN WORKSPACE</span><h1><?= escape($title) ?></h1><p>Menu sudah tersedia. Isi dan fungsi halaman ini akan dikembangkan pada tahap berikutnya.</p></div>
             <?php endif ?>

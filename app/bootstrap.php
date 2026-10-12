@@ -6,6 +6,9 @@ require_once __DIR__ . '/Auth.php';
 require_once __DIR__ . '/Mailer.php';
 require_once __DIR__ . '/Navigation.php';
 require_once __DIR__ . '/Dashboard.php';
+require_once __DIR__ . '/ContentCalendar.php';
+require_once __DIR__ . '/ContentEditor.php';
+require_once __DIR__ . '/ObservanceAutomation.php';
 
 function bootstrap(): App
 {

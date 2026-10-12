@@ -82,12 +82,6 @@ try {
             echo 'Anda tidak memiliki akses admin sistem.';
             exit;
         }
-        if ($method !== 'GET') {
-            header('Allow: GET');
-            http_response_code(405);
-            echo 'Menu admin hanya menerima navigasi GET.';
-            exit;
-        }
         $navigation = adminNavigation();
         $sections = array_merge(...array_values($navigation));
         $section = $_GET['section'] ?? 'dashboard';
@@ -96,7 +90,22 @@ try {
             echo 'Menu tidak tersedia.';
             exit;
         }
-        if ($section === 'dashboard') {
+        if ($method === 'POST' && ($section !== 'calendar' || !is_string($_POST['action'] ?? null)
+            || !in_array($_POST['action'], ['create_content', 'delete_content', 'automation_enable', 'automation_disable', 'generate_ideas'], true))) {
+            header('Allow: GET');
+            http_response_code(405);
+            echo 'Tindakan pada menu admin tidak tersedia.';
+            exit;
+        }
+        if ($section === 'calendar') {
+            $_SESSION['content_creation_key'] ??= bin2hex(random_bytes(32));
+            $contentForm = [
+                'title' => '', 'brief' => '', 'company_id' => '', 'format' => 'unspecified',
+                'status' => 'idea', 'planned_at' => '', 'creation_key' => $_SESSION['content_creation_key'],
+            ];
+            $contentFormOpen = false;
+        }
+        if (in_array($section, ['dashboard', 'calendar'], true)) {
             $companyInput = $_GET['company'] ?? 'all';
             if (!is_string($companyInput)
                 || ($companyInput !== 'all' && !preg_match('/\A[1-9][0-9]{0,8}\z/', $companyInput))) {
@@ -104,8 +113,35 @@ try {
                 echo 'Filter perusahaan tidak valid.';
                 exit;
             }
+            $monthInput = $_GET['month'] ?? (new DateTimeImmutable('now', new DateTimeZone('Asia/Jakarta')))->format('Y-m');
+            $statusInput = $_GET['status'] ?? 'all';
+            if ($section === 'calendar' && (!is_string($monthInput)
+                || !preg_match('/\A20[0-9]{2}-(0[1-9]|1[0-2])\z/', $monthInput)
+                || !is_string($statusInput)
+                || ($statusInput !== 'all' && !isset(Dashboard::STATUSES[$statusInput])))) {
+                http_response_code(400);
+                echo 'Filter bulan atau status tidak valid.';
+                exit;
+            }
+            if ($section === 'calendar' && $method === 'GET' && array_key_exists('date', $_GET)) {
+                $dateInput = $_GET['date'];
+                if (!is_string($dateInput) || !preg_match('/\A20[0-9]{2}-[0-9]{2}-[0-9]{2}\z/', $dateInput)
+                    || substr($dateInput, 0, 7) !== $monthInput
+                    || !checkdate((int) substr($dateInput, 5, 2), (int) substr($dateInput, 8, 2), (int) substr($dateInput, 0, 4))) {
+                    http_response_code(400);
+                    echo 'Tanggal kalender tidak valid.';
+                    exit;
+                }
+                $contentForm['planned_at'] = $dateInput . 'T09:00';
+                $contentFormOpen = true;
+            }
             try {
-                $dashboard = (new Dashboard($app))->snapshot($companyInput === 'all' ? null : (int) $companyInput);
+                $companyId = $companyInput === 'all' ? null : (int) $companyInput;
+                if ($section === 'calendar') {
+                    $calendar = (new ContentCalendar($app))->snapshot($companyId, $monthInput, $statusInput);
+                } else {
+                    $dashboard = (new Dashboard($app))->snapshot($companyId);
+                }
             } catch (InvalidArgumentException) {
                 http_response_code(400);
                 echo 'Perusahaan yang dipilih tidak terdaftar.';
@@ -151,6 +187,59 @@ try {
             $auth->clearSession();
             $_SESSION['notice'] = 'Anda telah keluar dari akun.';
             redirectTo($app->url());
+        } elseif ($page === 'admin' && $section === 'calendar') {
+            $action = formField('action');
+            try {
+                if ($action === 'delete_content') {
+                    $contentId = formField('content_id');
+                    if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $contentId) || formField('confirm_delete') !== '1') {
+                        throw new InvalidArgumentException('Konfirmasi penghapusan dan pilih konten yang valid.');
+                    }
+                    (new ContentEditor($app))->delete((int) $contentId, (int) $user['id']);
+                    $_SESSION['notice'] = 'Konten dihapus dari kalender dan dashboard. Ide otomatis yang dihapus tidak akan dibuat ulang.';
+                    redirectTo($app->url('admin') . '&' . http_build_query([
+                        'section' => 'calendar', 'company' => $companyInput, 'month' => $monthInput, 'status' => $statusInput,
+                    ]));
+                }
+                if ($action === 'create_content') {
+                    foreach (array_keys($contentForm) as $field) {
+                        $contentForm[$field] = formField($field);
+                    }
+                    $contentFormOpen = true;
+                    if (!hash_equals($_SESSION['content_creation_key'], $contentForm['creation_key'])) {
+                        throw new InvalidArgumentException('Form konten sudah digunakan atau kedaluwarsa. Muat ulang halaman.');
+                    }
+                    (new ContentEditor($app))->create($contentForm, (int) $user['id']);
+                    $_SESSION['content_creation_key'] = bin2hex(random_bytes(32));
+                    $_SESSION['notice'] = 'Konten disimpan sebagai ' . ContentEditor::INITIAL_STATUSES[$contentForm['status']]
+                        . '. Tanggal rencana bukan jadwal publikasi otomatis.';
+                    redirectTo($app->url('admin') . '&' . http_build_query([
+                        'section' => 'calendar', 'company' => $contentForm['company_id'],
+                        'month' => $contentForm['planned_at'] === '' ? $monthInput : substr($contentForm['planned_at'], 0, 7),
+                    ]));
+                }
+                $automation = new ObservanceAutomation($app);
+                if ($action === 'automation_disable') {
+                    $automation->disable((int) $user['id']);
+                    $_SESSION['notice'] = 'Pembuatan ide otomatis dijeda. Konten yang sudah ada tidak dihapus.';
+                } else {
+                    if ($action === 'automation_enable') {
+                        $automation->enable((int) $user['id']);
+                    }
+                    $summary = $automation->generate((int) substr($monthInput, 0, 4));
+                    if (!$summary['enabled']) {
+                        throw new InvalidArgumentException('Aktifkan ide otomatis terlebih dahulu.');
+                    }
+                    $_SESSION['notice'] = $summary['created'] . ' ide baru dibuat untuk semua perusahaan aktif pada tahun '
+                        . $summary['year'] . '. Ide yang sudah ada tidak ditimpa; tidak ada publikasi.';
+                }
+                redirectTo($app->url('admin') . '&' . http_build_query([
+                    'section' => 'calendar', 'company' => $companyInput, 'month' => $monthInput, 'status' => $statusInput,
+                ]));
+            } catch (InvalidArgumentException $validationError) {
+                http_response_code(422);
+                $error = $validationError->getMessage();
+            }
         } elseif ($page === 'login' && $user === null) {
             $emailInput = trim(formField('email'));
             $email = emailAddress($emailInput);

@@ -9,6 +9,8 @@ if (($argv[1] ?? '') === 'reset') {
     echo (new Auth($app))->resetPassword($token, 'concurrent-passphrase-2026') ? '1' : '0';
 } elseif (($argv[1] ?? '') === 'mail') {
     echo json_encode((new MailWorker($app))->run(), JSON_THROW_ON_ERROR);
+} elseif (($argv[1] ?? '') === 'calendar') {
+    echo json_encode((new ObservanceAutomation($app))->generate(2027), JSON_THROW_ON_ERROR);
 } else {
     throw new RuntimeException('Unknown test operation.');
 }

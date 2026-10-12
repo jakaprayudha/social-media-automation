@@ -47,6 +47,8 @@ try {
             . "  init:development  Install local-only configuration and database (no default account)\n"
             . "  migrate        Apply SQLite migrations without dropping data\n"
             . "  admin:create   Create an administrator interactively\n"
+            . "  calendar:enable EMAIL   Enable observance ideas with this administrator as owner\n"
+            . "  calendar:generate [YEAR]   Generate missing ideas (defaults to current year)\n"
             . "  mail:work      Process up to 10 reset emails (cron-safe)\n"
             . "  mail:status    Show queue health without sensitive payloads\n"
             . "  preflight      Validate configuration and runtime\n";
@@ -106,9 +108,34 @@ try {
             echo "Administrator created. No default credentials are installed.\n";
             break;
         case 'mail:work':
+            $ideas = (new ObservanceAutomation($app))->generate(ObservanceAutomation::currentYear());
             $summary = (new MailWorker($app))->run();
+            $summary['calendar'] = $ideas;
             echo json_encode($summary, JSON_THROW_ON_ERROR), PHP_EOL;
             exit($summary['failed'] > 0 || $summary['retried'] > 0 ? 1 : 0);
+        case 'calendar:enable':
+            $email = emailAddress($argv[2] ?? '');
+            if ($email === null) {
+                throw new InvalidArgumentException('Provide the email of an active administrator.');
+            }
+            $query = $app->db()->prepare("SELECT id FROM users WHERE email = ? AND is_active = 1 AND role = 'system_admin'");
+            $query->execute([$email]);
+            $ownerId = $query->fetchColumn();
+            if ($ownerId === false) {
+                throw new InvalidArgumentException('Active administrator not found.');
+            }
+            $automation = new ObservanceAutomation($app);
+            $automation->enable((int) $ownerId);
+            echo json_encode($automation->generate(ObservanceAutomation::currentYear()), JSON_THROW_ON_ERROR), PHP_EOL;
+            break;
+        case 'calendar:generate':
+            $year = $argv[2] ?? (string) ObservanceAutomation::currentYear();
+            if (!preg_match('/\A20[0-9]{2}\z/', $year)) {
+                throw new InvalidArgumentException('Year must be between 2000 and 2099.');
+            }
+            $result = (new ObservanceAutomation($app))->generate((int) $year);
+            echo json_encode($result, JSON_THROW_ON_ERROR), PHP_EOL;
+            break;
         case 'mail:status':
             $rows = $app->db()->query("SELECT status, COUNT(*) AS count, MIN(created_at) AS oldest_created_at
                 FROM mail_jobs GROUP BY status")->fetchAll();

@@ -199,6 +199,40 @@ try {
         check(true, 'Reject credentials in base URL');
     }
     $auth = new Auth($app);
+    $calendarService = new ContentCalendar($app);
+    $emptyCalendar = $calendarService->snapshot(null, '2026-10', 'all');
+    check($emptyCalendar['total'] === 0 && $emptyCalendar['unscheduled'] === 66,
+        'Empty calendar does not invent dates or demo content');
+    $fixtureQuery = $app->db()->prepare('SELECT id FROM content_items WHERE company_id = ? AND status = ? ORDER BY id LIMIT 1');
+    $calendarFixtures = [
+        [$companyIds[0], 'scheduled', '2026-09-30T17:00:00Z'],
+        [$companyIds[1], 'published', '2026-10-31T16:59:59Z'],
+        [$companyIds[2], 'failed', '2026-10-31T17:00:00Z'],
+    ];
+    foreach ($calendarFixtures as [$fixtureCompany, $fixtureStatus, $fixtureTime]) {
+        $fixtureQuery->execute([$fixtureCompany, $fixtureStatus]);
+        $fixtureId = $fixtureQuery->fetchColumn();
+        $fixtureQuery->closeCursor();
+        $app->db()->prepare('UPDATE content_items SET scheduled_at = ?, brief = ? WHERE id = ?')
+            ->execute([(new DateTimeImmutable($fixtureTime))->getTimestamp(), '<script>calendar brief</script>', $fixtureId]);
+    }
+    $octoberCalendar = $calendarService->snapshot(null, '2026-10', 'all');
+    check($octoberCalendar['total'] === 2 && count($octoberCalendar['days']['2026-10-01']) === 1
+        && count($octoberCalendar['days']['2026-10-31']) === 1 && $octoberCalendar['unscheduled'] === 63,
+        'Calendar respects local month boundaries and excludes the next month');
+    check($calendarService->snapshot($companyIds[0], '2026-10', 'scheduled')['total'] === 1
+        && $calendarService->snapshot($companyIds[0], '2026-10', 'published')['total'] === 0
+        && $calendarService->snapshot(null, '2026-10', 'published')['total'] === 1,
+        'Calendar company and status filters isolate actual content');
+    check($calendarService->snapshot(null, '2028-02', 'all')['start']->format('t') === '29'
+        && $calendarService->snapshot(null, '2000-01', 'all')['previous_month'] === null
+        && $calendarService->snapshot(null, '2099-12', 'all')['next_month'] === null,
+        'Calendar supports leap months and bounds month navigation');
+    $app->db()->prepare('UPDATE companies SET timezone = ? WHERE id = ?')->execute(['America/New_York', $companyIds[0]]);
+    check($calendarService->snapshot($companyIds[0], '2026-09', 'all')['total'] === 1
+        && $calendarService->snapshot($companyIds[0], '2026-10', 'all')['total'] === 0,
+        'Selected company calendar uses its timezone');
+    $app->db()->prepare('UPDATE companies SET timezone = ? WHERE id = ?')->execute(['Asia/Jakarta', $companyIds[0]]);
     $auth->startSession();
     check(strlen($auth->csrf()) === 64 && !$auth->validCsrf('wrong') && !$auth->validCsrf([]), 'CSRF generation and validation');
     $sessionBefore = session_id();
@@ -365,6 +399,9 @@ try {
     check(str_contains($signedIn['body'], 'data-metric="drafts">18</strong>')
         && str_contains($signedIn['body'], '&lt;script&gt;test&lt;/script&gt;')
         && !str_contains($signedIn['body'], '<script>test</script>'), 'Render actual aggregate data and escape content titles');
+    check(preg_match('/assets\/admin\.js\?v=[0-9]+/', $signedIn['body']) === 1
+        && preg_match('/assets\/admin\.css\?v=[0-9]+/', $signedIn['body']) === 1,
+        'Admin assets have versioned URLs so updated calendar interactions bypass stale caches');
     foreach ($companyIds as $index => $companyId) {
         $scopedPage = request($adminUrl . '&company=' . $companyId, $jar);
         check($scopedPage['status'] === 200
@@ -376,6 +413,237 @@ try {
         && request($adminUrl . '&company=999999', $jar)['status'] === 400,
         'Reject malformed and unknown company filters');
     $sections = array_merge(...array_values(adminNavigation()));
+    $calendarUrl = $adminUrl . '&section=calendar';
+    $calendarPage = request($calendarUrl . '&month=2026-10', $jar);
+    check($calendarPage['status'] === 200 && str_contains($calendarPage['body'], 'Oktober 2026')
+        && str_contains($calendarPage['body'], '2 konten bertanggal')
+        && str_contains($calendarPage['body'], '<details class="calendar-event')
+        && str_contains($calendarPage['body'], '&lt;script&gt;calendar brief&lt;/script&gt;')
+        && !str_contains($calendarPage['body'], '<script>calendar brief</script>'),
+        'Render SQLite calendar, expandable details and escaped brief');
+    $filteredCalendar = request($calendarUrl . '&month=2026-10&status=scheduled&company=' . $companyIds[0], $jar);
+    check($filteredCalendar['status'] === 200 && str_contains($filteredCalendar['body'], '1 konten bertanggal')
+        && str_contains($filteredCalendar['body'], 'status=scheduled&amp;month=2026-09')
+        && str_contains($filteredCalendar['body'], 'value="2026-10"'),
+        'Calendar navigation preserves filters and month input');
+    check(str_contains(request($calendarUrl . '&month=2028-02', $jar)['body'], 'Belum ada konten bertanggal'),
+        'Calendar shows honest empty state');
+    foreach (['month=2026-13', 'month[]=2026-10', 'month=invalid', 'status=unknown', 'status[]=scheduled',
+        'company[]=1', 'company=999999', 'company='] as $invalidCalendarFilter) {
+        check(request($calendarUrl . '&' . $invalidCalendarFilter, $jar)['status'] === 400,
+            'Reject calendar filter: ' . $invalidCalendarFilter);
+    }
+    check(request($calendarUrl, $directory . '/guest-calendar-cookies.txt')['status'] === 303
+        && request($calendarUrl, $jar, [])['status'] === 405, 'Calendar requires authentication and rejects mutations');
+    check(str_contains($calendarPage['body'], '+ Tambah konten')
+        && str_contains($calendarPage['body'], 'Hari Batik Nasional')
+        && str_contains($calendarPage['body'], 'Hari Sumpah Pemuda')
+        && str_contains($calendarPage['body'], 'Lihat sumber tanggal'),
+        'Calendar exposes content creation and sourced national observances');
+    $contentInput = [
+        'company_id' => (string) $companyIds[0], 'title' => '<script>Manual title</script>',
+        'brief' => 'Manual brief', 'status' => 'idea', 'format' => 'image',
+        'planned_at' => '2026-10-12T10:30', 'creation_key' => bin2hex(random_bytes(32)),
+    ];
+    $editor = new ContentEditor($app);
+    $manualId = $editor->create($contentInput, $userId);
+    $manualQuery = $app->db()->prepare('SELECT * FROM content_items WHERE id = ?');
+    $manualQuery->execute([$manualId]);
+    $manual = $manualQuery->fetch();
+    $manualQuery->closeCursor();
+    check($manual['status'] === 'idea' && $manual['scheduled_at'] === null
+        && (int) $manual['planned_at'] === (new DateTimeImmutable('2026-10-12T03:30:00Z'))->getTimestamp()
+        && (int) $manual['owner_id'] === $userId
+        && $editor->create($contentInput, $userId) === $manualId,
+        'Manual creation stores local planning time in UTC and replay does not duplicate content');
+    $noDateInput = $contentInput;
+    $noDateInput['creation_key'] = bin2hex(random_bytes(32));
+    $noDateInput['planned_at'] = '';
+    $noDateInput['status'] = 'brief';
+    $noDateId = $editor->create($noDateInput, $userId);
+    $manualQuery->execute([$noDateId]);
+    check($manualQuery->fetch()['planned_at'] === null, 'Content can be saved without inventing a planned date');
+    $manualQuery->closeCursor();
+    foreach ([
+        ['title' => ''], ['title' => str_repeat('x', 201)], ['brief' => str_repeat('x', 5001)],
+        ['company_id' => '999999'], ['status' => 'published'], ['format' => 'unknown'],
+        ['planned_at' => '2026-02-30T09:00'], ['planned_at' => '2026-10-12T25:00'],
+        ['planned_at' => '2100-01-01T09:00'], ['creation_key' => 'bad'],
+    ] as $invalidInput) {
+        try {
+            $editor->create(array_replace($contentInput, $invalidInput), $userId);
+            check(false, 'Reject invalid content field ' . array_key_first($invalidInput));
+        } catch (InvalidArgumentException) {
+            check(true, 'Reject invalid content field ' . array_key_first($invalidInput));
+        }
+    }
+    $app->db()->prepare("UPDATE companies SET timezone = 'America/New_York' WHERE id = ?")->execute([$companyIds[0]]);
+    try {
+        $editor->create(array_replace($contentInput, ['planned_at' => '2026-03-08T02:30']), $userId);
+        check(false, 'Reject non-existent DST local time');
+    } catch (InvalidArgumentException) {
+        check(true, 'Reject non-existent DST local time');
+    }
+    $app->db()->prepare("UPDATE companies SET timezone = 'Asia/Jakarta' WHERE id = ?")->execute([$companyIds[0]]);
+    $creationPage = request($calendarUrl . '&month=2026-10', $jar);
+    if (!preg_match('/name="creation_key" value="([a-f0-9]{64})"/', $creationPage['body'], $keyMatch)) {
+        throw new RuntimeException('Content creation key missing.');
+    }
+    $httpContent = array_replace($contentInput, [
+        'action' => 'create_content', 'creation_key' => $keyMatch[1], 'title' => 'HTTP content',
+    ]);
+    $beforeContent = (int) $app->db()->query('SELECT COUNT(*) FROM content_items')->fetchColumn();
+    check(request($calendarUrl, $jar, $httpContent)['status'] === 419
+        && (int) $app->db()->query('SELECT COUNT(*) FROM content_items')->fetchColumn() === $beforeContent,
+        'CSRF protects content creation from writes');
+    $httpContent['csrf'] = csrfFrom($creationPage['body']);
+    $invalidContent = request($calendarUrl, $jar, array_replace($httpContent, ['title' => '', 'brief' => '<script>invalid brief</script>']));
+    check($invalidContent['status'] === 422 && str_contains($invalidContent['body'], 'Judul wajib diisi')
+        && str_contains($invalidContent['body'], '&lt;script&gt;invalid brief&lt;/script&gt;'),
+        'Creation errors are shown explicitly with escaped retained fields');
+    check(request($calendarUrl, $jar, $httpContent)['status'] === 303
+        && (int) $app->db()->query('SELECT COUNT(*) FROM content_items')->fetchColumn() === $beforeContent + 1,
+        'Valid content submission persists and redirects');
+    check(request($calendarUrl, $jar, $httpContent)['status'] === 422
+        && (int) $app->db()->query('SELECT COUNT(*) FROM content_items')->fetchColumn() === $beforeContent + 1,
+        'Replayed creation form cannot duplicate content');
+    check(str_contains(request($calendarUrl . '&month=2026-10', $jar)['body'], 'HTTP content'),
+        'Newly saved content appears in the SQLite calendar');
+    $automation = new ObservanceAutomation($app);
+    check(!$automation->generate(2026)['enabled'], 'Automatic ideas are explicit opt-in and disabled before activation');
+    $enableData = ['action' => 'automation_enable', 'csrf' => csrfFrom(request($calendarUrl, $jar)['body'])];
+    check(request($calendarUrl . '&month=2026-10', $jar, ['action' => 'automation_enable'])['status'] === 419,
+        'CSRF protects observance automation settings');
+    check(request($calendarUrl . '&month=2026-10', $jar, $enableData)['status'] === 303,
+        'Admin can activate yearly ideas from the calendar');
+    $catalogSize = (int) $app->db()->query('SELECT COUNT(*) FROM observances')->fetchColumn();
+    check((int) $app->db()->query('SELECT COUNT(*) FROM content_items WHERE observance_year = 2026')->fetchColumn() === $catalogSize * 3
+        && (int) $app->db()->query("SELECT COUNT(*) FROM content_items WHERE observance_id IS NOT NULL AND (status != 'idea' OR scheduled_at IS NOT NULL)")->fetchColumn() === 0,
+        'Generate one real idea per observance and company without approval or publication');
+    $app->db()->exec("UPDATE content_items SET title = 'Human edited idea', status = 'brief'
+        WHERE id = (SELECT MIN(id) FROM content_items WHERE observance_id IS NOT NULL)");
+    check($automation->generate(2026)['created'] === 0
+        && (int) $app->db()->query("SELECT COUNT(*) FROM content_items WHERE title = 'Human edited idea' AND status = 'brief'")->fetchColumn() === 1,
+        'Repeated generation never duplicates or overwrites human changes');
+    $parallelIdeas = array_map(fn(string $result): array => json_decode($result, true, 8, JSON_THROW_ON_ERROR),
+        concurrent('calendar', $configPath));
+    check(array_sum(array_column($parallelIdeas, 'created')) === $catalogSize * 3
+        && (int) $app->db()->query('SELECT COUNT(*) FROM content_items WHERE observance_year = 2027')->fetchColumn() === $catalogSize * 3,
+        'Concurrent yearly generators create ideas exactly once');
+    $app->db()->prepare("UPDATE companies SET status = 'inactive' WHERE id = ?")->execute([$companyIds[2]]);
+    check($automation->generate(2028)['created'] === $catalogSize * 2, 'Inactive companies do not receive automatic ideas');
+    try {
+        $editor->create(array_replace($contentInput, ['company_id' => (string) $companyIds[2]]), $userId);
+        check(false, 'Reject content creation for inactive companies');
+    } catch (InvalidArgumentException) {
+        check(true, 'Reject content creation for inactive companies');
+    }
+    $app->db()->prepare("UPDATE companies SET status = 'active' WHERE id = ?")->execute([$companyIds[2]]);
+    check($automation->generate(2028)['created'] === $catalogSize, 'Newly active companies receive only their missing ideas');
+    $app->db()->prepare('UPDATE users SET is_active = 0 WHERE id = ?')->execute([$userId]);
+    try {
+        $automation->generate(2029);
+        check(false, 'Inactive automation owner is an explicit error');
+    } catch (InvalidArgumentException) {
+        check(true, 'Inactive automation owner is an explicit error');
+    }
+    try {
+        $editor->create($contentInput, $userId);
+        check(false, 'Reject content creation by inactive owners');
+    } catch (InvalidArgumentException) {
+        check(true, 'Reject content creation by inactive owners');
+    }
+    $app->db()->prepare('UPDATE users SET is_active = 1 WHERE id = ?')->execute([$userId]);
+    $internationalCalendar = request($calendarUrl . '&month=2026-06&status=published', $jar);
+    check(str_contains($internationalCalendar['body'], 'Hari Lingkungan Hidup Sedunia')
+        && !str_contains($internationalCalendar['body'], 'Ide: Hari Lingkungan Hidup Sedunia'),
+        'International observances remain visible independently of the content status filter');
+    $beforeGet = (int) $app->db()->query('SELECT COUNT(*) FROM content_items')->fetchColumn();
+    request($calendarUrl . '&month=2030-10', $jar);
+    check((int) $app->db()->query('SELECT COUNT(*) FROM content_items')->fetchColumn() === $beforeGet,
+        'Viewing a future calendar never writes or triggers generation through GET');
+    $datedPage = request($calendarUrl . '&month=2026-10&company=' . $companyIds[0] . '&date=2026-10-20', $jar);
+    check($datedPage['status'] === 200 && str_contains($datedPage['body'], 'id="content-create" open')
+        && str_contains($datedPage['body'], 'value="2026-10-20T09:00"')
+        && str_contains($datedPage['body'], 'data-add-date="2026-10-20"')
+        && str_contains($datedPage['body'], '&amp;date=2026-10-20#content-create'),
+        'Date links open a prefilled form without JavaScript and preserve company filters');
+    foreach (['date=2026-02-30', 'date=2026-11-01', 'date[]=2026-10-20', 'date=invalid'] as $invalidDate) {
+        check(request($calendarUrl . '&month=2026-10&' . $invalidDate, $jar)['status'] === 400,
+            'Reject invalid calendar add date: ' . $invalidDate);
+    }
+    $httpId = (int) $app->db()->query("SELECT id FROM content_items WHERE title = 'HTTP content'")->fetchColumn();
+    $deleteData = ['action' => 'delete_content', 'content_id' => (string) $httpId, 'confirm_delete' => '1'];
+    check(request($calendarUrl, $jar, $deleteData)['status'] === 419,
+        'Deleting calendar content requires CSRF');
+    $deleteData['csrf'] = csrfFrom($datedPage['body']);
+    check(request($calendarUrl, $jar, array_replace($deleteData, ['confirm_delete' => '']))['status'] === 422
+        && request($calendarUrl, $jar, array_replace($deleteData, ['content_id' => 'bad']))['status'] === 422,
+        'Deletion requires explicit confirmation and a valid content ID');
+    $beforeDeleteCalendar = $calendarService->snapshot($companyIds[0], '2026-10', 'all')['total'];
+    $beforeDeleteDashboard = $dashboardService->snapshot($companyIds[0])['total_content'];
+    $deleteResponse = request($calendarUrl . '&month=2026-10&status=idea&company=' . $companyIds[0], $jar, $deleteData);
+    check($deleteResponse['status'] === 303
+        && str_contains($deleteResponse['headers'], 'month=2026-10&status=idea')
+        && $calendarService->snapshot($companyIds[0], '2026-10', 'all')['total'] === $beforeDeleteCalendar - 1
+        && $dashboardService->snapshot($companyIds[0])['total_content'] === $beforeDeleteDashboard - 1
+        && !str_contains(request($calendarUrl . '&month=2026-10', $jar)['body'], 'HTTP content'),
+        'Deletion removes content from calendar and dashboard and preserves redirect filters');
+    check(request($calendarUrl, $jar, $deleteData)['status'] === 422,
+        'Already deleted content is reported explicitly');
+    $deletedRecord = $app->db()->prepare('SELECT deleted_at, deleted_by FROM content_items WHERE id = ?');
+    $deletedRecord->execute([$httpId]);
+    $deletedRow = $deletedRecord->fetch();
+    $deletedRecord->closeCursor();
+    check($deletedRow['deleted_at'] !== null && (int) $deletedRow['deleted_by'] === $userId
+        && !in_array('HTTP content', array_column($dashboardService->snapshot(null)['recent_content'], 'title'), true),
+        'Deletion persists actor/time and removes content from aggregate recent items');
+    $beforeUndatedDelete = $calendarService->snapshot(null, '2026-10', 'all')['unscheduled'];
+    $editor->delete($noDateId, $userId);
+    check($calendarService->snapshot(null, '2026-10', 'all')['unscheduled'] === $beforeUndatedDelete - 1,
+        'Deleting a brief also removes it from undated counts');
+    try {
+        $editor->create($noDateInput, $userId);
+        check(false, 'Replayed creation key cannot restore deleted content');
+    } catch (InvalidArgumentException) {
+        check(true, 'Replayed creation key cannot restore deleted content');
+    }
+    foreach (array_diff(array_keys(Dashboard::STATUSES), ['idea', 'brief']) as $protectedStatus) {
+        $protectedQuery = $app->db()->prepare('SELECT id FROM content_items WHERE status = ? AND deleted_at IS NULL LIMIT 1');
+        $protectedQuery->execute([$protectedStatus]);
+        $protectedId = (int) $protectedQuery->fetchColumn();
+        $protectedQuery->closeCursor();
+        check(request($calendarUrl, $jar, array_replace($deleteData, ['content_id' => (string) $protectedId]))['status'] === 422,
+            'Server prevents deletion of status ' . $protectedStatus);
+    }
+    $publishedCalendar = request($calendarUrl . '&month=2026-10&status=published', $jar);
+    check(!str_contains($publishedCalendar['body'], 'name="action" value="delete_content"'),
+        'Delete controls are not rendered for published content');
+    $app->db()->prepare('UPDATE users SET is_active = 0 WHERE id = ?')->execute([$userId]);
+    try {
+        $editor->delete($manualId, $userId);
+        check(false, 'Inactive administrators cannot delete content');
+    } catch (InvalidArgumentException) {
+        check(true, 'Inactive administrators cannot delete content');
+    }
+    $app->db()->prepare('UPDATE users SET is_active = 1 WHERE id = ?')->execute([$userId]);
+    $autoId = (int) $app->db()->query("SELECT MIN(id) FROM content_items WHERE observance_year = 2027")->fetchColumn();
+    $editor->delete($autoId, $userId);
+    $afterAutoDelete = (int) $app->db()->query('SELECT COUNT(*) FROM content_items WHERE observance_year = 2027 AND deleted_at IS NULL')->fetchColumn();
+    $parallelDeletedIdeas = array_map(fn(string $result): array => json_decode($result, true, 8, JSON_THROW_ON_ERROR),
+        concurrent('calendar', $configPath));
+    check(array_sum(array_column($parallelDeletedIdeas, 'created')) === 0
+        && (int) $app->db()->query('SELECT COUNT(*) FROM content_items WHERE observance_year = 2027 AND deleted_at IS NULL')->fetchColumn() === $afterAutoDelete,
+        'Parallel generators cannot recreate a deleted automatic idea');
+    check((int) $app->db()->query("SELECT COUNT(*) FROM audit_events WHERE action = 'content.deleted'")->fetchColumn() === 3,
+        'Successful deletions are audited and rejected deletions are not success events');
+    check(request($calendarUrl, $jar, ['action' => 'automation_disable', 'csrf' => $enableData['csrf']])['status'] === 303
+        && !$automation->generate(2029)['enabled']
+        && (int) $app->db()->query('SELECT COUNT(*) FROM content_items WHERE observance_year = 2026')->fetchColumn() === $catalogSize * 3,
+        'Pausing automation stops generation but preserves existing ideas');
+    $app->migrate();
+    check((int) $app->db()->query('SELECT COUNT(*) FROM observances')->fetchColumn() === $catalogSize,
+        'Calendar migration is repeatable and does not duplicate the catalog');
     foreach ($sections as $key => $item) {
         $menuPage = request($adminUrl . '&section=' . $key, $jar);
         if ($item['later'] ?? false) {
