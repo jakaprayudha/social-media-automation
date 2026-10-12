@@ -423,7 +423,7 @@ try {
         'Render SQLite calendar, expandable details and escaped brief');
     $filteredCalendar = request($calendarUrl . '&month=2026-10&status=scheduled&company=' . $companyIds[0], $jar);
     check($filteredCalendar['status'] === 200 && str_contains($filteredCalendar['body'], '1 konten bertanggal')
-        && str_contains($filteredCalendar['body'], 'status=scheduled&amp;month=2026-09')
+        && str_contains($filteredCalendar['body'], 'status=scheduled&amp;campaign=all&amp;month=2026-09')
         && str_contains($filteredCalendar['body'], 'value="2026-10"'),
         'Calendar navigation preserves filters and month input');
     check(str_contains(request($calendarUrl . '&month=2028-02', $jar)['body'], 'Belum ada konten bertanggal'),
@@ -644,6 +644,195 @@ try {
     $app->migrate();
     check((int) $app->db()->query('SELECT COUNT(*) FROM observances')->fetchColumn() === $catalogSize,
         'Calendar migration is repeatable and does not duplicate the catalog');
+    $campaignService = new Campaigns($app);
+    $campaignUrl = $adminUrl . '&section=campaigns';
+    check($campaignService->snapshot(null, 'all')['items'] === []
+        && str_contains(request($campaignUrl, $jar)['body'], 'Belum ada kampanye'),
+        'Campaign page starts with an honest SQLite empty state');
+    $campaignInput = [
+        'company_id' => (string) $companyIds[0], 'name' => '<script>Campaign</script>',
+        'objective' => '<script>Objective</script>', 'theme' => 'Digital',
+        'start_date' => '2026-10-01', 'end_date' => '2026-10-31', 'status' => 'draft',
+        'creation_key' => bin2hex(random_bytes(32)),
+    ];
+    $campaignId = $campaignService->save($campaignInput, $userId);
+    check($campaignService->save($campaignInput, $userId) === $campaignId
+        && count($campaignService->snapshot(null, 'all')['items']) === 1,
+        'Campaign creation is persistent and replay-safe');
+    $app->db()->prepare('UPDATE users SET is_active = 0 WHERE id = ?')->execute([$userId]);
+    try {
+        $campaignService->save($campaignInput, $userId);
+        check(false, 'Inactive administrators cannot manage campaigns');
+    } catch (InvalidArgumentException) {
+        check(true, 'Inactive administrators cannot manage campaigns');
+    }
+    $app->db()->prepare('UPDATE users SET is_active = 1 WHERE id = ?')->execute([$userId]);
+    $app->db()->prepare("UPDATE companies SET status = 'inactive' WHERE id = ?")->execute([$companyIds[0]]);
+    try {
+        $campaignService->save($campaignInput, $userId);
+        check(false, 'Inactive companies cannot receive new campaigns');
+    } catch (InvalidArgumentException) {
+        check(true, 'Inactive companies cannot receive new campaigns');
+    }
+    $app->db()->prepare("UPDATE companies SET status = 'active' WHERE id = ?")->execute([$companyIds[0]]);
+    foreach ([
+        ['name' => ''], ['name' => str_repeat('x', 201)], ['objective' => str_repeat('x', 5001)],
+        ['theme' => str_repeat('x', 501)], ['start_date' => '2026-02-30'],
+        ['end_date' => '2026-09-30'], ['company_id' => '999999'], ['status' => 'archived'],
+        ['status' => 'invalid'], ['creation_key' => 'invalid'],
+    ] as $invalidCampaign) {
+        try {
+            $campaignService->save(array_replace($campaignInput, $invalidCampaign), $userId);
+            check(false, 'Reject invalid campaign field ' . array_key_first($invalidCampaign));
+        } catch (InvalidArgumentException) {
+            check(true, 'Reject invalid campaign field ' . array_key_first($invalidCampaign));
+        }
+    }
+    $campaignService->save(array_replace($campaignInput, ['status' => 'active']), $userId, $campaignId, 1);
+    check($campaignService->snapshot($companyIds[0], 'active')['items'][0]['version'] === 2
+        && $campaignService->snapshot($companyIds[1], 'all')['items'] === [],
+        'Campaign edit increments version and filters isolate company/status');
+    foreach ([
+        [$campaignInput, 1],
+        [array_replace($campaignInput, ['company_id' => (string) $companyIds[1]]), 2],
+    ] as [$editInput, $editVersion]) {
+        try {
+            $campaignService->save($editInput, $userId, $campaignId, $editVersion);
+            check(false, 'Reject stale campaign edit or company reassignment');
+        } catch (InvalidArgumentException) {
+            check(true, 'Reject stale campaign edit or company reassignment');
+        }
+    }
+    $campaignService->assign($campaignId, $manualId, $userId);
+    $linkedInput = array_replace($contentInput, [
+        'title' => 'Campaign linked content', 'creation_key' => bin2hex(random_bytes(32)),
+        'campaign_id' => (string) $campaignId,
+    ]);
+    $linkedId = $editor->create($linkedInput, $userId);
+    check($campaignService->snapshot(null, 'all', $campaignId)['items'][0]['content_count'] === 2
+        && $calendarService->snapshot($companyIds[0], '2026-10', 'all', $campaignId)['total'] === 2,
+        'Existing and new calendar content link to campaigns with correct aggregates');
+    foreach ([
+        array_replace($linkedInput, ['company_id' => (string) $companyIds[1]]),
+        array_replace($linkedInput, ['campaign_id' => '999999']),
+    ] as $invalidLink) {
+        try {
+            $editor->create($invalidLink, $userId);
+            check(false, 'Reject new content campaign mismatch');
+        } catch (InvalidArgumentException) {
+            check(true, 'Reject new content campaign mismatch');
+        }
+    }
+    $foreignContent = $app->db()->prepare("SELECT id FROM content_items WHERE company_id = ? AND status = 'idea' AND deleted_at IS NULL LIMIT 1");
+    $foreignContent->execute([$companyIds[1]]);
+    $foreignId = (int) $foreignContent->fetchColumn();
+    $foreignContent->closeCursor();
+    try {
+        $campaignService->assign($campaignId, $foreignId, $userId);
+        check(false, 'Reject existing cross-company content assignment');
+    } catch (InvalidArgumentException) {
+        check(true, 'Reject existing cross-company content assignment');
+    }
+    try {
+        $app->db()->prepare('UPDATE content_items SET campaign_id = ? WHERE id = ?')->execute([$campaignId, $foreignId]);
+        check(false, 'Database enforces campaign and content company consistency');
+    } catch (PDOException) {
+        check(true, 'Database enforces campaign and content company consistency');
+    }
+    $campaignDetailPage = request($campaignUrl . '&id=' . $campaignId, $jar);
+    check($campaignDetailPage['status'] === 200
+        && str_contains($campaignDetailPage['body'], '&lt;script&gt;Objective&lt;/script&gt;')
+        && str_contains($campaignDetailPage['body'], 'Campaign linked content')
+        && str_contains($campaignDetailPage['body'], '+ Tambah konten kampanye')
+        && !str_contains($campaignDetailPage['body'], '<script>Campaign</script>'),
+        'Campaign detail renders escaped fields, linked content and calendar actions');
+    $campaignCalendarPage = request($calendarUrl . '&month=2026-10&campaign=' . $campaignId, $jar);
+    check($campaignCalendarPage['status'] === 200
+        && str_contains($campaignCalendarPage['body'], '2 konten bertanggal')
+        && str_contains($campaignCalendarPage['body'], '&amp;campaign=' . $campaignId . '&amp;month=2026-09')
+        && str_contains($campaignCalendarPage['body'], 'id="content-campaign"'),
+        'Calendar campaign filter applies to all content and preserves month navigation');
+    foreach (['status=invalid', 'status[]=draft', 'company=invalid', 'company=999999', 'id=invalid', 'id=999999', 'edit=1'] as $badCampaignFilter) {
+        check(request($campaignUrl . '&' . $badCampaignFilter, $jar)['status'] === 400,
+            'Reject campaign filter ' . $badCampaignFilter);
+    }
+    check(request($calendarUrl . '&campaign[]=1', $jar)['status'] === 400
+        && request($calendarUrl . '&campaign=999999', $jar)['status'] === 400
+        && request($calendarUrl . '&company=' . $companyIds[1] . '&campaign=' . $campaignId, $jar)['status'] === 400,
+        'Reject malformed or cross-company calendar campaign filters');
+    $campaignCreationPage = request($campaignUrl, $jar);
+    if (!preg_match('/name="creation_key" value="([a-f0-9]{64})"/', $campaignCreationPage['body'], $campaignKey)) {
+        throw new RuntimeException('Campaign form key missing.');
+    }
+    $campaignPost = array_replace($campaignInput, [
+        'action' => 'create_campaign', 'name' => 'HTTP campaign', 'creation_key' => $campaignKey[1],
+    ]);
+    check(request($campaignUrl, $jar, $campaignPost)['status'] === 419,
+        'Campaign creation requires CSRF');
+    $campaignPost['csrf'] = csrfFrom($campaignCreationPage['body']);
+    $invalidCampaignPage = request($campaignUrl, $jar, array_replace($campaignPost, ['name' => '', 'objective' => '<script>retained</script>']));
+    check($invalidCampaignPage['status'] === 422 && str_contains($invalidCampaignPage['body'], '&lt;script&gt;retained&lt;/script&gt;'),
+        'Campaign validation displays errors with escaped retained input');
+    check(request($campaignUrl, $jar, $campaignPost)['status'] === 303
+        && request($campaignUrl, $jar, $campaignPost)['status'] === 422,
+        'HTTP campaign creation redirects and rejects duplicate form replay');
+    $httpCampaignId = (int) $app->db()->query("SELECT id FROM campaigns WHERE name = 'HTTP campaign'")->fetchColumn();
+    $assignInput = array_replace($contentInput, ['creation_key' => bin2hex(random_bytes(32)), 'title' => 'Existing content to link']);
+    $assignId = $editor->create($assignInput, $userId);
+    $assignPost = ['action' => 'assign_content', 'campaign_id' => (string) $httpCampaignId, 'content_id' => (string) $assignId];
+    check(request($campaignUrl . '&id=' . $httpCampaignId, $jar, $assignPost)['status'] === 419,
+        'Linking existing campaign content requires CSRF');
+    $assignPost['csrf'] = $campaignPost['csrf'];
+    check(request($campaignUrl . '&id=' . $httpCampaignId, $jar, $assignPost)['status'] === 303
+        && request($campaignUrl . '&id=' . $httpCampaignId, $jar, $assignPost)['status'] === 422,
+        'Existing content linking persists once and cannot silently replace another association');
+    $publishedId = (int) $app->db()->query("SELECT MIN(id) FROM content_items WHERE status = 'published'")->fetchColumn();
+    check(request($campaignUrl . '&id=' . $httpCampaignId, $jar, array_replace($assignPost, ['content_id' => (string) $publishedId]))['status'] === 422,
+        'Campaign assignment cannot mutate already published content');
+    $editPage = request($campaignUrl . '&id=' . $campaignId . '&edit=1', $jar);
+    check($editPage['status'] === 200 && str_contains($editPage['body'], 'value="update_campaign"')
+        && str_contains($editPage['body'], 'value="2"'),
+        'Campaign edit opens a versioned, prefilled form');
+    $campaignUpdate = array_replace($campaignInput, [
+        'action' => 'update_campaign', 'campaign_id' => (string) $campaignId, 'version' => '2',
+        'status' => 'completed', 'csrf' => csrfFrom($editPage['body']),
+    ]);
+    check(request($campaignUrl . '&id=' . $campaignId, $jar, $campaignUpdate)['status'] === 303
+        && request($campaignUrl . '&id=' . $campaignId, $jar, $campaignUpdate)['status'] === 422,
+        'HTTP campaign edit persists and stale version is rejected');
+    $archivePost = ['action' => 'archive_campaign', 'campaign_id' => (string) $campaignId, 'version' => '3',
+        'csrf' => $campaignUpdate['csrf']];
+    check(request($campaignUrl . '&id=' . $campaignId, $jar, $archivePost)['status'] === 422,
+        'Campaign archiving requires explicit confirmation');
+    $archivePost['confirm_archive'] = '1';
+    check(request($campaignUrl . '&id=' . $campaignId, $jar, $archivePost)['status'] === 303
+        && count($campaignService->snapshot(null, 'all', $campaignId)['content']) === 2,
+        'Archiving keeps linked content and history');
+    check(request($campaignUrl . '&id=' . $campaignId, $jar, $campaignUpdate)['status'] === 422,
+        'Server rejects forged edits of an archived campaign');
+    check($calendarService->snapshot($companyIds[0], '2026-10', 'all', $campaignId)['total'] === 2,
+        'Archived campaign content remains accessible in the calendar');
+    try {
+        $editor->create(array_replace($linkedInput, ['creation_key' => bin2hex(random_bytes(32))]), $userId);
+        check(false, 'Archived campaigns cannot receive new content');
+    } catch (InvalidArgumentException) {
+        check(true, 'Archived campaigns cannot receive new content');
+    }
+    try {
+        $campaignService->assign($campaignId, $foreignId, $userId);
+        check(false, 'Archived campaigns cannot link existing content');
+    } catch (InvalidArgumentException) {
+        check(true, 'Archived campaigns cannot link existing content');
+    }
+    check(request($campaignUrl . '&id=' . $campaignId . '&edit=1', $jar)['status'] === 400
+        && request($campaignUrl, $directory . '/campaign-guest.txt')['status'] === 303,
+        'Archived campaigns cannot be edited and guests cannot access campaign pages');
+    $editor->delete($linkedId, $userId);
+    check(count($campaignService->snapshot(null, 'all', $campaignId)['content']) === 1,
+        'Campaign content counts exclude deleted content');
+    $app->migrate();
+    check(count($campaignService->snapshot(null, 'all')['items']) === 2,
+        'Campaign migration preserves data and does not insert demo campaigns');
     foreach ($sections as $key => $item) {
         $menuPage = request($adminUrl . '&section=' . $key, $jar);
         if ($item['later'] ?? false) {

@@ -6,6 +6,7 @@ $months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agus
 $monthLabel = $months[(int) $calendar['start']->format('n') - 1] . ' ' . $calendar['start']->format('Y');
 $calendarUrl = $app->url('admin') . '&' . http_build_query([
     'section' => 'calendar', 'company' => $selectedCompany['id'] ?? 'all', 'status' => $calendar['status'],
+    'campaign' => $calendar['selected_campaign']['id'] ?? 'all',
 ]);
 $offset = (int) $calendar['start']->format('N') - 1;
 $dayCount = (int) $calendar['start']->format('t');
@@ -28,6 +29,12 @@ $formAction = $calendarUrl . '&month=' . $calendar['month'];
                     <option value="<?= (int) $company['id'] ?>" <?= (string) $company['id'] === ($contentForm['company_id'] !== '' ? $contentForm['company_id'] : (string) ($selectedCompany['id'] ?? '')) ? 'selected' : '' ?>><?= escape($company['name']) ?> (<?= escape($company['timezone']) ?>)</option>
                 <?php endforeach ?>
             </select></div>
+            <div><label for="content-campaign">Kampanye (opsional)</label><select id="content-campaign" name="campaign_id">
+                <option value="">Tanpa kampanye</option>
+                <?php foreach ($calendar['campaigns'] as $campaign): if ($campaign['status'] === 'archived') { continue; } ?>
+                    <option value="<?= (int) $campaign['id'] ?>" data-company-id="<?= (int) $campaign['company_id'] ?>" <?= (string) $campaign['id'] === $contentForm['campaign_id'] ? 'selected' : '' ?>><?= escape($campaign['name'] . ' — ' . $campaign['company_name']) ?></option>
+                <?php endforeach ?>
+            </select><small>Harus berasal dari perusahaan yang sama; kampanye arsip tidak menerima konten baru.</small></div>
             <div><label for="content-title">Judul konten</label><input id="content-title" name="title" maxlength="200" value="<?= escape($contentForm['title']) ?>" required></div>
             <div><label for="content-status">Status awal</label><select id="content-status" name="status">
                 <?php foreach (ContentEditor::INITIAL_STATUSES as $value => $label): ?><option value="<?= escape($value) ?>" <?= $contentForm['status'] === $value ? 'selected' : '' ?>><?= escape($label) ?></option><?php endforeach ?>
@@ -61,6 +68,12 @@ $formAction = $calendarUrl . '&month=' . $calendar['month'];
 <form class="calendar-filters company-filter" method="get" action="<?= escape($app->basePath() . '/index.php') ?>">
     <input type="hidden" name="page" value="admin">
     <input type="hidden" name="section" value="calendar">
+    <div class="calendar-filter-field"><label for="calendar-campaign">Kampanye</label><select id="calendar-campaign" name="campaign">
+        <option value="all">Semua kampanye</option>
+        <?php foreach ($calendar['campaigns'] as $campaign): if ($selectedCompany !== null && (int) $campaign['company_id'] !== (int) $selectedCompany['id']) { continue; } ?>
+            <option value="<?= (int) $campaign['id'] ?>" <?= $calendar['selected_campaign'] !== null && (int) $campaign['id'] === (int) $calendar['selected_campaign']['id'] ? 'selected' : '' ?>><?= escape($campaign['name'] . ' — ' . $campaign['company_name']) ?></option>
+        <?php endforeach ?>
+    </select></div>
     <div class="calendar-filter-field"><label for="calendar-company">Perusahaan</label><select id="calendar-company" name="company">
         <option value="all" <?= $selectedCompany === null ? 'selected' : '' ?>>Semua perusahaan</option>
         <?php foreach ($calendar['companies'] as $company): ?>
@@ -117,6 +130,7 @@ $formAction = $calendarUrl . '&month=' . $calendar['month'];
                                 <summary><span class="calendar-event-time"><?= escape((new DateTimeImmutable('@' . $content['calendar_at']))->setTimezone(new DateTimeZone($calendar['timezone']))->format('H:i')) ?> · <?= $content['scheduled_at'] === null ? 'Rencana' : 'Jadwal' ?></span><strong><?= escape($content['title']) ?></strong><small><?= escape($content['company_name']) ?><?= $content['observance_id'] !== null ? ' · Ide otomatis' : '' ?></small><span class="status-pill"><?= escape(Dashboard::STATUSES[$content['status']]) ?></span></summary>
                                 <dl class="calendar-detail">
                                     <dt>Pemilik</dt><dd><?= escape($content['owner_name']) ?></dd>
+                                    <dt>Kampanye</dt><dd><?= $content['campaign_name'] === null ? 'Tanpa kampanye' : escape($content['campaign_name']) ?></dd>
                                     <dt>Format</dt><dd><?= escape(ContentEditor::FORMATS[$content['format']] ?? $content['format']) ?></dd>
                                     <dt>Waktu perusahaan</dt><dd><?= escape(dashboardTime((int) $content['calendar_at'], $content['company_timezone'])) ?><br><?= escape($content['company_timezone']) ?></dd>
                                     <dt>Brief</dt><dd><?= $content['brief'] === '' ? 'Belum ditambahkan' : escape($content['brief']) ?></dd>

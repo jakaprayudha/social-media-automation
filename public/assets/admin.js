@@ -28,6 +28,21 @@ if (toggle && sidebar && shell) {
 const contentCreate = document.getElementById('content-create');
 const plannedAt = document.getElementById('content-planned-at');
 const contentTitle = document.getElementById('content-title');
+const contentCompany = document.getElementById('content-company');
+const contentCampaign = document.getElementById('content-campaign');
+
+if (contentCompany && contentCampaign) {
+    const filterCampaigns = () => {
+        Array.from(contentCampaign.options).forEach((option) => {
+            const unavailable = option.value !== '' && option.dataset.companyId !== contentCompany.value;
+            option.hidden = unavailable;
+            option.disabled = unavailable;
+            if (unavailable && option.selected) contentCampaign.value = '';
+        });
+    };
+    contentCompany.addEventListener('change', filterCampaigns);
+    filterCampaigns();
+}
 
 if (contentCreate && plannedAt && contentTitle) {
     const openContentForm = (date) => {

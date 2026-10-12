@@ -39,6 +39,17 @@ final class ContentEditor
             if ($timezone === false) {
                 throw new InvalidArgumentException('Pilih perusahaan yang terdaftar dan aktif.');
             }
+            $campaignId = $input['campaign_id'] ?? '';
+            if ($campaignId !== '') {
+                if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $campaignId)) {
+                    throw new InvalidArgumentException('Kampanye tidak valid.');
+                }
+                $campaign = $db->prepare("SELECT 1 FROM campaigns WHERE id = ? AND company_id = ? AND status != 'archived'");
+                $campaign->execute([(int) $campaignId, (int) $input['company_id']]);
+                if (!$campaign->fetchColumn()) {
+                    throw new InvalidArgumentException('Pilih kampanye yang tidak diarsipkan dari perusahaan yang sama.');
+                }
+            }
             $plannedAt = null;
             if ($input['planned_at'] !== '') {
                 if (!preg_match('/\A20[0-9]{2}-(0[1-9]|1[0-2])-[0-9]{2}T[0-9]{2}:[0-9]{2}\z/', $input['planned_at'])) {
@@ -64,9 +75,9 @@ final class ContentEditor
             }
             $now = time();
             $db->prepare('INSERT INTO content_items (company_id, owner_id, title, format, brief, status,
-                planned_at, creation_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+                planned_at, creation_key, created_at, updated_at, campaign_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
                 ->execute([(int) $input['company_id'], $ownerId, $title, $input['format'], $brief,
-                    $input['status'], $plannedAt, $input['creation_key'], $now, $now]);
+                    $input['status'], $plannedAt, $input['creation_key'], $now, $now, $campaignId === '' ? null : (int) $campaignId]);
             $id = (int) $db->lastInsertId();
             $this->app->audit('content.created', $ownerId);
             return $id;

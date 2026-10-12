@@ -177,6 +177,19 @@ main { padding: 39px 36px; outline: none; }
 .calendar-delete label { display: block; margin: 10px 0; cursor: pointer; }
 .calendar-danger { padding: 7px 9px; border: 1px solid #b34555; border-radius: 6px; color: white; background: #b34555; font-size: 10px; }
 .content-create { scroll-margin-top: 18px; }
+.campaign-list, .campaign-detail { margin-top: 24px; }
+.campaign-detail-link { color: var(--purple); text-decoration: underline; }
+.campaign-wide { grid-column: 1 / -1; }
+.campaign-description { font-size: 12px; color: #766783; }
+.campaign-description dt { font-weight: 600; margin-top: 12px; }
+.campaign-description dd { margin: 4px 0 15px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.campaign-content-heading { font-size: 13px; margin-top: 25px; }
+.campaign-content-list { list-style: none; padding: 0; }
+.campaign-content-list li { padding: 12px 0; border-bottom: 1px solid #eee9f4; font-size: 11px; overflow-wrap: anywhere; }
+.campaign-content-list small { display: block; color: #95879f; }
+.campaign-link-form { margin: 20px 0; }
+.campaign-link-form label { display: block; font-size: 11px; color: #766783; margin-bottom: 8px; }
+.campaign-link-form select { font: inherit; padding: 10px; max-width: 100%; border: 1px solid #e4dfeb; border-radius: 7px; margin: 0 7px 10px 0; }
 @media (max-width: 1250px) {
     .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .dashboard-heading { flex-direction: column; }

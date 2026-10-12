@@ -90,8 +90,12 @@ try {
             echo 'Menu tidak tersedia.';
             exit;
         }
-        if ($method === 'POST' && ($section !== 'calendar' || !is_string($_POST['action'] ?? null)
-            || !in_array($_POST['action'], ['create_content', 'delete_content', 'automation_enable', 'automation_disable', 'generate_ideas'], true))) {
+        $adminActions = [
+            'calendar' => ['create_content', 'delete_content', 'automation_enable', 'automation_disable', 'generate_ideas'],
+            'campaigns' => ['create_campaign', 'update_campaign', 'archive_campaign', 'assign_content'],
+        ];
+        if ($method === 'POST' && (!is_string($_POST['action'] ?? null)
+            || !in_array($_POST['action'], $adminActions[$section] ?? [], true))) {
             header('Allow: GET');
             http_response_code(405);
             echo 'Tindakan pada menu admin tidak tersedia.';
@@ -101,11 +105,18 @@ try {
             $_SESSION['content_creation_key'] ??= bin2hex(random_bytes(32));
             $contentForm = [
                 'title' => '', 'brief' => '', 'company_id' => '', 'format' => 'unspecified',
-                'status' => 'idea', 'planned_at' => '', 'creation_key' => $_SESSION['content_creation_key'],
+                'status' => 'idea', 'planned_at' => '', 'creation_key' => $_SESSION['content_creation_key'], 'campaign_id' => '',
             ];
             $contentFormOpen = false;
         }
-        if (in_array($section, ['dashboard', 'calendar'], true)) {
+        if ($section === 'campaigns') {
+            $_SESSION['campaign_creation_key'] ??= bin2hex(random_bytes(32));
+            $campaignForm = ['name' => '', 'objective' => '', 'theme' => '', 'company_id' => '',
+                'start_date' => '', 'end_date' => '', 'status' => 'draft', 'creation_key' => $_SESSION['campaign_creation_key']];
+            $campaignFormOpen = false;
+            $campaignEdit = false;
+        }
+        if (in_array($section, ['dashboard', 'calendar', 'campaigns'], true)) {
             $companyInput = $_GET['company'] ?? 'all';
             if (!is_string($companyInput)
                 || ($companyInput !== 'all' && !preg_match('/\A[1-9][0-9]{0,8}\z/', $companyInput))) {
@@ -115,6 +126,17 @@ try {
             }
             $monthInput = $_GET['month'] ?? (new DateTimeImmutable('now', new DateTimeZone('Asia/Jakarta')))->format('Y-m');
             $statusInput = $_GET['status'] ?? 'all';
+            $campaignInput = $_GET['campaign'] ?? 'all';
+            $detailInput = $_GET['id'] ?? null;
+            if (($section === 'calendar' && (!is_string($campaignInput)
+                || ($campaignInput !== 'all' && !preg_match('/\A[1-9][0-9]{0,8}\z/', $campaignInput))))
+                || ($section === 'campaigns' && (!is_string($statusInput)
+                || ($statusInput !== 'all' && !isset(Campaigns::STATUSES[$statusInput]))
+                || ($detailInput !== null && (!is_string($detailInput) || !preg_match('/\A[1-9][0-9]{0,8}\z/', $detailInput)))))) {
+                http_response_code(400);
+                echo 'Filter kampanye tidak valid.';
+                exit;
+            }
             if ($section === 'calendar' && (!is_string($monthInput)
                 || !preg_match('/\A20[0-9]{2}-(0[1-9]|1[0-2])\z/', $monthInput)
                 || !is_string($statusInput)
@@ -138,13 +160,35 @@ try {
             try {
                 $companyId = $companyInput === 'all' ? null : (int) $companyInput;
                 if ($section === 'calendar') {
-                    $calendar = (new ContentCalendar($app))->snapshot($companyId, $monthInput, $statusInput);
+                    $calendar = (new ContentCalendar($app))->snapshot($companyId, $monthInput, $statusInput,
+                        $campaignInput === 'all' ? null : (int) $campaignInput);
+                    if ($method === 'GET' && $calendar['selected_campaign'] !== null) {
+                        $contentForm['company_id'] = (string) $calendar['selected_campaign']['company_id'];
+                        if ($calendar['selected_campaign']['status'] !== 'archived') {
+                            $contentForm['campaign_id'] = (string) $calendar['selected_campaign']['id'];
+                        }
+                    }
+                } elseif ($section === 'campaigns') {
+                    $campaignData = (new Campaigns($app))->snapshot($companyId, $statusInput,
+                        $detailInput === null ? null : (int) $detailInput);
+                    $campaignVersion = $campaignData['detail']['version'] ?? null;
+                    if ($method === 'GET' && isset($_GET['edit'])) {
+                        if ($_GET['edit'] !== '1' || $campaignData['detail'] === null
+                            || $campaignData['detail']['status'] === 'archived') {
+                            throw new InvalidArgumentException('Invalid campaign edit.');
+                        }
+                        foreach (array_keys($campaignForm) as $field) {
+                            $campaignForm[$field] = (string) $campaignData['detail'][$field];
+                        }
+                        $campaignEdit = true;
+                        $campaignFormOpen = true;
+                    }
                 } else {
                     $dashboard = (new Dashboard($app))->snapshot($companyId);
                 }
             } catch (InvalidArgumentException) {
                 http_response_code(400);
-                echo 'Perusahaan yang dipilih tidak terdaftar.';
+                echo 'Perusahaan atau kampanye yang dipilih tidak tersedia.';
                 exit;
             }
         }
@@ -187,6 +231,61 @@ try {
             $auth->clearSession();
             $_SESSION['notice'] = 'Anda telah keluar dari akun.';
             redirectTo($app->url());
+        } elseif ($page === 'admin' && $section === 'campaigns') {
+            $action = formField('action');
+            $campaignService = new Campaigns($app);
+            try {
+                $targetId = null;
+                if ($action !== 'create_campaign') {
+                    $idInput = formField('campaign_id');
+                    if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $idInput)) {
+                        throw new InvalidArgumentException('ID kampanye tidak valid.');
+                    }
+                    $targetId = (int) $idInput;
+                    if ($campaignData['detail'] === null || (int) $campaignData['detail']['id'] !== $targetId) {
+                        throw new InvalidArgumentException('Kampanye pada form tidak sesuai dengan halaman detail.');
+                    }
+                }
+                if (in_array($action, ['create_campaign', 'update_campaign'], true)) {
+                    $campaignEdit = $action === 'update_campaign';
+                    $campaignFormOpen = true;
+                    foreach (array_keys($campaignForm) as $field) {
+                        $campaignForm[$field] = formField($field);
+                    }
+                    if (!$campaignEdit && !hash_equals($_SESSION['campaign_creation_key'], $campaignForm['creation_key'])) {
+                        throw new InvalidArgumentException('Form kampanye sudah digunakan atau kedaluwarsa. Muat ulang halaman.');
+                    }
+                    $versionInput = formField('version');
+                    $campaignVersion = $versionInput;
+                    if ($campaignEdit && !preg_match('/\A[1-9][0-9]*\z/', $versionInput)) {
+                        throw new InvalidArgumentException('Versi kampanye tidak valid.');
+                    }
+                    $targetId = $campaignService->save($campaignForm, (int) $user['id'], $targetId,
+                        $campaignEdit ? (int) $versionInput : null);
+                    if (!$campaignEdit) {
+                        $_SESSION['campaign_creation_key'] = bin2hex(random_bytes(32));
+                    }
+                    $_SESSION['notice'] = 'Kampanye berhasil disimpan. Tidak ada publikasi otomatis.';
+                } elseif ($action === 'archive_campaign') {
+                    $versionInput = formField('version');
+                    if (formField('confirm_archive') !== '1' || !preg_match('/\A[1-9][0-9]*\z/', $versionInput)) {
+                        throw new InvalidArgumentException('Centang konfirmasi arsip dan gunakan versi form yang valid.');
+                    }
+                    $campaignService->archive($targetId, (int) $versionInput, (int) $user['id']);
+                    $_SESSION['notice'] = 'Kampanye diarsipkan. Konten dan riwayatnya tetap disimpan.';
+                } else {
+                    $contentInput = formField('content_id');
+                    if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $contentInput)) {
+                        throw new InvalidArgumentException('Pilih konten yang valid.');
+                    }
+                    $campaignService->assign($targetId, (int) $contentInput, (int) $user['id']);
+                    $_SESSION['notice'] = 'Konten berhasil dikaitkan ke kampanye.';
+                }
+                redirectTo($app->url('admin') . '&section=campaigns&id=' . $targetId);
+            } catch (InvalidArgumentException $validationError) {
+                http_response_code(422);
+                $error = $validationError->getMessage();
+            }
         } elseif ($page === 'admin' && $section === 'calendar') {
             $action = formField('action');
             try {
@@ -198,7 +297,7 @@ try {
                     (new ContentEditor($app))->delete((int) $contentId, (int) $user['id']);
                     $_SESSION['notice'] = 'Konten dihapus dari kalender dan dashboard. Ide otomatis yang dihapus tidak akan dibuat ulang.';
                     redirectTo($app->url('admin') . '&' . http_build_query([
-                        'section' => 'calendar', 'company' => $companyInput, 'month' => $monthInput, 'status' => $statusInput,
+                        'section' => 'calendar', 'company' => $companyInput, 'month' => $monthInput, 'status' => $statusInput, 'campaign' => $campaignInput,
                     ]));
                 }
                 if ($action === 'create_content') {
@@ -216,6 +315,7 @@ try {
                     redirectTo($app->url('admin') . '&' . http_build_query([
                         'section' => 'calendar', 'company' => $contentForm['company_id'],
                         'month' => $contentForm['planned_at'] === '' ? $monthInput : substr($contentForm['planned_at'], 0, 7),
+                        'campaign' => $contentForm['campaign_id'] === '' ? 'all' : $contentForm['campaign_id'],
                     ]));
                 }
                 $automation = new ObservanceAutomation($app);
@@ -234,7 +334,7 @@ try {
                         . $summary['year'] . '. Ide yang sudah ada tidak ditimpa; tidak ada publikasi.';
                 }
                 redirectTo($app->url('admin') . '&' . http_build_query([
-                    'section' => 'calendar', 'company' => $companyInput, 'month' => $monthInput, 'status' => $statusInput,
+                    'section' => 'calendar', 'company' => $companyInput, 'month' => $monthInput, 'status' => $statusInput, 'campaign' => $campaignInput,
                 ]));
             } catch (InvalidArgumentException $validationError) {
                 http_response_code(422);

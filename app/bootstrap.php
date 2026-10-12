@@ -9,6 +9,7 @@ require_once __DIR__ . '/Dashboard.php';
 require_once __DIR__ . '/ContentCalendar.php';
 require_once __DIR__ . '/ContentEditor.php';
 require_once __DIR__ . '/ObservanceAutomation.php';
+require_once __DIR__ . '/Campaigns.php';
 
 function bootstrap(): App
 {

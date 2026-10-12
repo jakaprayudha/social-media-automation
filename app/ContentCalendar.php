@@ -8,7 +8,7 @@ final class ContentCalendar
     }
 
     /** @return array<string, mixed> */
-    public function snapshot(?int $companyId, string $month, string $status): array
+    public function snapshot(?int $companyId, string $month, string $status, ?int $campaignId = null): array
     {
         if (!preg_match('/\A20[0-9]{2}-(0[1-9]|1[0-2])\z/', $month)
             || ($status !== 'all' && !isset(Dashboard::STATUSES[$status]))) {
@@ -42,12 +42,29 @@ final class ContentCalendar
                 $conditions[] = 'c.status = ?';
                 $parameters[] = $status;
             }
+            $campaigns = $db->query('SELECT ca.id, ca.name, ca.company_id, ca.status, co.name AS company_name
+                FROM campaigns ca JOIN companies co ON co.id = ca.company_id ORDER BY ca.name, ca.id')->fetchAll();
+            $selectedCampaign = null;
+            if ($campaignId !== null) {
+                foreach ($campaigns as $campaign) {
+                    if ((int) $campaign['id'] === $campaignId
+                        && ($companyId === null || (int) $campaign['company_id'] === $companyId)) {
+                        $selectedCampaign = $campaign;
+                        break;
+                    }
+                }
+                if ($selectedCampaign === null) {
+                    throw new InvalidArgumentException('Unknown campaign in this company.');
+                }
+                $conditions[] = 'c.campaign_id = ?';
+                $parameters[] = $campaignId;
+            }
             $scope = $conditions === [] ? '' : ' AND ' . implode(' AND ', $conditions);
             $query = $db->prepare('SELECT c.id, c.title, c.status, c.format, c.brief, c.scheduled_at, c.observance_id,
                 COALESCE(c.scheduled_at, c.planned_at) AS calendar_at,
-                co.name AS company_name, co.timezone AS company_timezone, u.name AS owner_name
+                co.name AS company_name, co.timezone AS company_timezone, u.name AS owner_name, ca.name AS campaign_name
                 FROM content_items c JOIN companies co ON co.id = c.company_id
-                JOIN users u ON u.id = c.owner_id
+                JOIN users u ON u.id = c.owner_id LEFT JOIN campaigns ca ON ca.id = c.campaign_id
                 WHERE COALESCE(c.scheduled_at, c.planned_at) >= CAST(? AS INTEGER)
                 AND COALESCE(c.scheduled_at, c.planned_at) < CAST(? AS INTEGER)' . $scope
                 . ' ORDER BY calendar_at, c.id');
@@ -75,6 +92,7 @@ final class ContentCalendar
                 'previous_month' => $month === '2000-01' ? null : $start->modify('-1 month')->format('Y-m'),
                 'next_month' => $month === '2099-12' ? null : $end->format('Y-m'),
                 'days' => $days, 'total' => count($items),
+                'campaigns' => $campaigns, 'selected_campaign' => $selectedCampaign,
                 'observances' => $observanceDays, 'observance_count' => $observanceCount,
                 'catalog_count' => (int) $db->query('SELECT COUNT(*) FROM observances')->fetchColumn(),
                 'automation' => $db->query('SELECT a.*, u.name AS owner_name FROM calendar_automation a JOIN users u ON u.id = a.owner_id WHERE a.id = 1')->fetch() ?: null,
