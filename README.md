@@ -11,7 +11,7 @@ Aplikasi internal HTML/CSS/JavaScript + PHP + SQLite untuk Social Media Automati
 - Area admin memerlukan session aktif dan role admin sistem. Sidebar responsif dapat dibuka/ditutup; tanpa JavaScript seluruh menu tetap tersedia. Logout tetap memakai POST + CSRF.
 - Tidak ada pendaftaran publik atau kredensial admin default.
 - Reset menggunakan token acak 256-bit, berlaku 30 menit, sekali pakai. Token disimpan sebagai hash; payload antrean email dienkripsi dengan Sodium.
-- Kata sandi minimal 12 karakter, maksimal 72 byte untuk menghindari truncation bcrypt. Session idle 30 menit dan umur maksimum 8 jam. Reset mencabut seluruh session lama.
+- Kata sandi minimal 4 karakter, maksimal 72 byte untuk menghindari truncation bcrypt. Password pendek kurang aman; gunakan frasa sandi yang panjang dan unik. Session idle 30 menit dan umur maksimum 8 jam. Reset mencabut seluruh session lama.
 - Pembatasan login: 10 percobaan/email dan 30/IP per 15 menit, termasuk percobaan berhasil. Permintaan reset: 3/email dan 10/IP per 15 menit. Respons alamat terdaftar/tidak terdaftar sama. Header IP proxy tidak dipercaya secara otomatis.
 - Form tetap berfungsi tanpa JavaScript. JavaScript hanya untuk melihat kata sandi dan indikator submit.
 

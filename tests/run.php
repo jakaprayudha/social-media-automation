@@ -187,7 +187,7 @@ try {
     } catch (PDOException) {
         check(true, 'Enforce company foreign key on content');
     }
-    check(passwordProblem('short') !== null && passwordProblem(str_repeat('a', 73)) !== null
+    check(passwordProblem('123') !== null && passwordProblem('1234') === null && passwordProblem(str_repeat('a', 73)) !== null
         && passwordProblem(str_repeat('a', 72)) === null
         && passwordProblem(str_repeat('é', 37)) !== null, 'Password minimum and bcrypt byte limit');
     $invalidConfig = $config;
@@ -412,7 +412,7 @@ try {
     $resetPage = request($resetUrl, $jar);
     $resetCsrf = csrfFrom($resetPage['body']);
     check(!str_contains($resetPage['body'], $httpToken), 'Do not render reset secret into DOM');
-    check(request($resetUrl, $jar, ['csrf' => $resetCsrf, 'password' => 'short', 'confirmation' => 'short'])['status'] === 422,
+    check(request($resetUrl, $jar, ['csrf' => $resetCsrf, 'password' => '123', 'confirmation' => '123'])['status'] === 422,
         'Validate password on server');
     check(request($resetUrl, $jar, ['csrf' => $resetCsrf, 'password' => 'http-reset-passphrase-2026', 'confirmation' => 'different'])['status'] === 422,
         'Reject mismatching password confirmation');

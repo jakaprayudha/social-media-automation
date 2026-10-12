@@ -109,14 +109,14 @@ $assetBase = $app->basePath() . '/assets';
                             <div class="label-row"><label for="password"><?= $page === 'reset' ? 'Kata sandi baru' : 'Kata sandi' ?></label>
                                 <?php if ($page === 'login'): ?><a href="<?= escape($app->url('forgot')) ?>">Lupa kata sandi?</a><?php endif ?>
                             </div>
-                            <div class="input-wrap password-wrap"><?= icon('lock') ?><input id="password" name="password" type="password" autocomplete="<?= $page === 'reset' ? 'new-password' : 'current-password' ?>" placeholder="<?= $page === 'reset' ? 'Minimal 12 karakter' : 'Masukkan kata sandi' ?>" <?= $page === 'reset' ? 'minlength="12" aria-describedby="password-help"' : '' ?> required><button class="reveal-button" type="button" data-toggle-password="password" aria-label="Tampilkan kata sandi" aria-pressed="false" hidden><?= icon('eye') ?></button></div>
-                            <?php if ($page === 'reset'): ?><p class="field-help" id="password-help">Minimal 12 karakter, maksimal 72 byte. Frasa panjang dengan beberapa kata lebih mudah diingat.</p><?php endif ?>
+                            <div class="input-wrap password-wrap"><?= icon('lock') ?><input id="password" name="password" type="password" autocomplete="<?= $page === 'reset' ? 'new-password' : 'current-password' ?>" placeholder="<?= $page === 'reset' ? 'Minimal 4 karakter' : 'Masukkan kata sandi' ?>" <?= $page === 'reset' ? 'minlength="4" aria-describedby="password-help"' : '' ?> required><button class="reveal-button" type="button" data-toggle-password="password" aria-label="Tampilkan kata sandi" aria-pressed="false" hidden><?= icon('eye') ?></button></div>
+                            <?php if ($page === 'reset'): ?><p class="field-help" id="password-help">Minimal 4 karakter, maksimal 72 byte. Frasa panjang dengan beberapa kata lebih mudah diingat.</p><?php endif ?>
                         </div>
                     <?php endif ?>
                     <?php if ($page === 'reset'): ?>
                         <div class="field">
                             <label for="confirmation">Konfirmasi kata sandi baru</label>
-                            <div class="input-wrap password-wrap"><?= icon('lock') ?><input id="confirmation" name="confirmation" type="password" autocomplete="new-password" placeholder="Ulangi kata sandi baru" minlength="12" required><button class="reveal-button" type="button" data-toggle-password="confirmation" aria-label="Tampilkan konfirmasi kata sandi" aria-pressed="false" hidden><?= icon('eye') ?></button></div>
+                            <div class="input-wrap password-wrap"><?= icon('lock') ?><input id="confirmation" name="confirmation" type="password" autocomplete="new-password" placeholder="Ulangi kata sandi baru" minlength="4" required><button class="reveal-button" type="button" data-toggle-password="confirmation" aria-label="Tampilkan konfirmasi kata sandi" aria-pressed="false" hidden><?= icon('eye') ?></button></div>
                         </div>
                     <?php endif ?>
                     <button class="primary-button" type="submit" <?= $page === 'forgot' && !$mailConfigured ? 'disabled' : '' ?>>

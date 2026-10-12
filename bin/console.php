@@ -82,7 +82,7 @@ try {
         case 'admin:create':
             $name = trim(prompt('Nama administrator'));
             $email = emailAddress(prompt('Email'));
-            $password = prompt('Kata sandi (minimal 12 karakter)', true);
+            $password = prompt('Kata sandi (minimal 4 karakter)', true);
             $confirmation = prompt('Ulangi kata sandi', true);
             if ($name === '' || mb_strlen($name) > 100 || $email === null) {
                 throw new RuntimeException('Nama atau email tidak valid.');

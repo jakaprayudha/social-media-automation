@@ -213,8 +213,8 @@ function emailAddress(string $input): ?string
 
 function passwordProblem(string $password): ?string
 {
-    if (mb_strlen($password) < 12 || strlen($password) > 72) {
-        return 'Gunakan minimal 12 karakter dan maksimal 72 byte untuk kata sandi.';
+    if (mb_strlen($password) < 4 || strlen($password) > 72) {
+        return 'Gunakan minimal 4 karakter dan maksimal 72 byte untuk kata sandi.';
     }
     if (str_contains($password, "\0") || preg_match('/\A\s+\z/u', $password)) {
         return 'Kata sandi tidak boleh hanya berisi spasi atau karakter yang tidak valid.';
