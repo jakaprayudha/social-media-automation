@@ -91,7 +91,7 @@ try {
             exit;
         }
         $adminActions = [
-            'ai' => ['create_ai_brief', 'generate_ai', 'save_ai_content'],
+            'ai' => ['create_ai_brief', 'generate_ai', 'save_ai_content', 'generate_image', 'attach_image'],
             'content' => ['create_content', 'update_content', 'delete_content'],
             'calendar' => ['create_content', 'delete_content', 'automation_enable', 'automation_disable', 'generate_ideas'],
             'campaigns' => ['create_campaign', 'update_campaign', 'archive_campaign', 'assign_content'],
@@ -104,6 +104,7 @@ try {
             exit;
         }
         if ($section === 'ai') {
+            $_SESSION['ai_image_key'] ??= bin2hex(random_bytes(32));
             $_SESSION['ai_creation_key'] ??= bin2hex(random_bytes(32));
             $aiForm = ['title' => '', 'brief' => '', 'audience' => '', 'tone' => 'Profesional dan ramah',
                 'facts' => '', 'company_id' => '', 'campaign_id' => '', 'media_type' => 'text',
@@ -119,6 +120,25 @@ try {
                 }
                 $studioData = (new AiStudio($app))->snapshot($companyInput === 'all' ? null : (int) $companyInput,
                     $detailInput === null ? null : (int) $detailInput);
+                $imageService = new AiImages($app);
+                $aiImages = $studioData['detail'] === null ? [] : $imageService->listing((int) $studioData['detail']['id']);
+                if (isset($_GET['image'])) {
+                    $imageInput = $_GET['image'];
+                    if ($method !== 'GET' || $studioData['detail'] === null || !is_string($imageInput)
+                        || !preg_match('/\A[1-9][0-9]{0,8}\z/', $imageInput)
+                        || (isset($_GET['image_download']) && $_GET['image_download'] !== '1')) {
+                        throw new InvalidArgumentException('Gambar tidak valid.');
+                    }
+                    $file = $imageService->file((int) $studioData['detail']['id'], (int) $imageInput);
+                    header('Content-Type: ' . $file['mime']);
+                    header('Content-Length: ' . filesize($file['path']));
+                    header('Content-Disposition: ' . (isset($_GET['image_download']) ? 'attachment' : 'inline')
+                        . '; filename="studio-image-' . (int) $imageInput . '.' . $file['extension'] . '"');
+                    if (readfile($file['path']) === false) {
+                        throw new RuntimeException('Cannot serve generated image.');
+                    }
+                    exit;
+                }
                 if (isset($_GET['download'])) {
                     if ($method !== 'GET' || $_GET['download'] !== '1' || $studioData['detail'] === null) {
                         throw new InvalidArgumentException('Ekspor tidak tersedia.');
@@ -348,6 +368,36 @@ try {
                 if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $idInput) || $studioData['detail'] === null
                     || (int) $studioData['detail']['id'] !== (int) $idInput) {
                     throw new InvalidArgumentException('Brief pada form tidak sesuai dengan detail halaman.');
+                }
+                if ($action === 'generate_image') {
+                    $imageForm = [];
+                    foreach (['platform', 'prompt', 'style', 'aspect_ratio', 'creation_key'] as $field) {
+                        $imageForm[$field] = formField('image_' . $field);
+                    }
+                    if (!hash_equals($_SESSION['ai_image_key'], $imageForm['creation_key'])) {
+                        throw new InvalidArgumentException('Form gambar sudah digunakan. Muat ulang detail.');
+                    }
+                    $imageId = (new AiImages($app))->generate((int) $idInput, (int) $user['id'], $imageForm,
+                        formField('image_consent') === '1', new GeminiImage($app));
+                    $_SESSION['ai_image_key'] = bin2hex(random_bytes(32));
+                    $imageRows = (new AiImages($app))->listing((int) $idInput);
+                    foreach ($imageRows as $imageRow) {
+                        if ((int) $imageRow['id'] === $imageId && $imageRow['status'] === 'generated') {
+                            $_SESSION['notice'] = 'Gambar berhasil disimpan. Preview tersedia di riwayat gambar; belum dipublikasikan.';
+                            break;
+                        }
+                    }
+                    redirectTo($app->url('admin') . '&section=ai&id=' . (int) $idInput . '#ai-image-' . $imageId);
+                }
+                if ($action === 'attach_image') {
+                    $imageId = formField('image_id');
+                    if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $imageId)) {
+                        throw new InvalidArgumentException('ID gambar tidak valid.');
+                    }
+                    (new AiImages($app))->attach((int) $idInput, (int) $imageId, (int) $user['id'],
+                        formField('confirm_image') === '1');
+                    $_SESSION['notice'] = 'Gambar dikaitkan ke draft konten, bukan dipublikasikan.';
+                    redirectTo($app->url('admin') . '&section=ai&id=' . (int) $idInput . '#ai-image-' . (int) $imageId);
                 }
                 if ($action === 'save_ai_content') {
                     $contentId = $studio->saveContent((int) $idInput, (int) $user['id'], formField('confirm_draft') === '1');

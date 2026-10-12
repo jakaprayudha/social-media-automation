@@ -79,23 +79,33 @@ final class Gemini implements AiTextProvider
             throw new AiFailure('configuration');
         }
         $config = $this->app->config['ai'];
-        $handle = curl_init('https://generativelanguage.googleapis.com/v1beta/models/' . $draft['model'] . ':generateContent');
+        return self::decode(self::request($this->app, $draft['model'], self::payload($draft), 512000, $config['timeout_seconds']), $draft['platforms']);
+    }
+
+    /** @param array<string, mixed> $payload */
+    public static function request(App $app, string $model, array $payload, int $maxBytes, int $timeout): string
+    {
+        $config = $app->config['ai'];
+        if (!preg_match('/\A(?:gemini|imagen)-[a-z0-9.-]{1,80}\z/', $model)) {
+            throw new AiFailure('configuration');
+        }
+        $handle = curl_init('https://generativelanguage.googleapis.com/v1beta/models/' . $model . ':generateContent');
         if ($handle === false) {
             throw new AiFailure('transport');
         }
         $body = '';
         curl_setopt_array($handle, [
             CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode(self::payload($draft), JSON_THROW_ON_ERROR),
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
             CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'x-goog-api-key: ' . $config['api_key']],
             CURLOPT_PROTOCOLS => CURLPROTO_HTTPS,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_CONNECTTIMEOUT => 10,
-            CURLOPT_TIMEOUT => $config['timeout_seconds'],
-            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body): int {
-                if (strlen($body) + strlen($chunk) > 512000) {
+            CURLOPT_TIMEOUT => $timeout,
+            CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk) use (&$body, $maxBytes): int {
+                if (strlen($body) + strlen($chunk) > $maxBytes) {
                     return 0;
                 }
                 $body .= $chunk;
@@ -111,7 +121,7 @@ final class Gemini implements AiTextProvider
                 401, 403 => 'credentials', 429 => 'quota', 404 => 'model', default => 'provider',
             });
         }
-        return self::decode($body, $draft['platforms']);
+        return $body;
     }
 
     /** @param list<string> $platforms @return array<string, mixed> */

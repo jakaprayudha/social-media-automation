@@ -9,11 +9,11 @@ $studioBase = $app->url('admin') . '&' . http_build_query(['section' => 'ai', 'c
     <div class="panel-heading"><div><h2 id="ai-capability-title">Teks sekarang, media final bertahap</h2><p>Generasi tidak berjalan saat membuka halaman.</p></div><span class="count-chip"><?= $studioData['configured'] ? 'Gemini terkonfigurasi' : 'Gemini belum dikonfigurasi' ?></span></div>
     <div class="ai-capability-grid">
         <div><?= icon('file') ?><h3>Blog &amp; caption</h3><p>Artikel, judul SEO, hook, CTA, hashtag, dan variasi per platform.</p><small><?= $studioData['configured'] ? 'Tersedia melalui antrean worker' : 'Memerlukan API key Gemini' ?></small></div>
-        <div><?= icon('image') ?><h3>Gambar</h3><p>Brief visual, arahan komposisi, dan alt text.</p><small>Belum menghasilkan file gambar</small></div>
+        <div><?= icon('image') ?><h3>Gambar</h3><p>Brief visual ke gambar final, pilihan rasio, preview, dan unduh.</p><small><?= GeminiImage::configured($app) ? 'Generate langsung dari hasil draft' : 'Memerlukan konfigurasi model gambar' ?></small></div>
         <div><?= icon('calendar') ?><h3>Video</h3><p>Skrip, storyboard, hook, narasi, dan caption.</p><small>Belum menghasilkan file video</small></div>
         <div><?= icon('file') ?><h3>Audio</h3><p>Naskah voice-over dan arahan audio.</p><small>Belum menghasilkan file audio</small></div>
     </div>
-    <div class="automation-body"><p>Hasil adalah draft, bukan jaminan siap post. Periksa fakta, hak pakai aset/musik, disclosure AI, dan format platform. Upload/analisis gambar, video, audio serta publikasi langsung belum tersedia pada tahap ini.</p>
+    <div class="automation-body"><p>Hasil adalah draft, bukan jaminan siap post. Periksa fakta, hak pakai aset/musik, disclosure AI, dan format platform. Gambar final tersedia melalui aksi terpisah; upload/analisis media, video/audio final serta publikasi langsung belum tersedia.</p>
         <?php if (!$studioData['configured']): ?><p class="error-notice">API Gemini belum dikonfigurasi. Anda bisa menyimpan brief, tetapi generate dinonaktifkan. Administrator perlu mengatur <code>ai</code> di konfigurasi privat; jangan kirim API key lewat chat.</p><?php endif ?>
         <p>Generasi memakai worker <code>php bin/console.php ai:work</code>, satu brief per eksekusi. Belum ada scheduler AI yang dipasang; antrean tidak otomatis diproses hanya dengan membuka halaman. Model/kuota bergantung akun Gemini Anda dan dapat dikenai biaya.</p>
     </div>
@@ -65,14 +65,16 @@ $studioBase = $app->url('admin') . '&' . http_build_query(['section' => 'ai', 'c
         <?php elseif ($detail['status'] === 'queued' || $detail['status'] === 'processing'): ?><p>Menunggu / sedang diproses worker. Muat ulang status setelah worker selesai. Tidak ada retry otomatis untuk menghindari biaya ganda.</p>
         <?php elseif ($detail['status'] === 'failed'): ?><p>Batas tiga percobaan tercapai. Perbaiki konfigurasi atau brief sebelum membuat brief baru.</p><?php endif ?>
         <?php if ($detail['result'] !== null): ?>
-            <p class="notice">Draft teks berhasil dihasilkan. Gambar, video, dan audio di bawah adalah brief/naskah, bukan file final. Belum disetujui atau diposting.</p>
+            <p class="notice">Draft teks berhasil dihasilkan. Brief/naskah di bawah bukan file media. Gunakan Generate gambar untuk membuat file visual terpisah; video/audio final belum tersedia. Belum disetujui atau diposting.</p>
             <a class="calendar-secondary" href="<?= escape($detailAction . '&download=1') ?>">Unduh paket teks (.txt)</a>
             <?php foreach ($detail['result']['variants'] as $variant): ?>
                 <details class="ai-result" open><summary><?= escape(AiStudio::PLATFORMS[$variant['platform']]) ?> · <?= escape($variant['title']) ?></summary><div class="content-form-grid">
                     <?php foreach (AiStudio::OUTPUT_FIELDS as $field => $label): if ($variant[$field] === '') { continue; } $fieldId = 'result-' . $variant['platform'] . '-' . $field; ?>
                         <div class="campaign-wide"><label for="<?= escape($fieldId) ?>"><?= escape($label) ?></label><textarea id="<?= escape($fieldId) ?>" rows="<?= in_array($field, ['body', 'script'], true) ? '8' : '3' ?>" readonly><?= escape($variant[$field]) ?></textarea></div>
                     <?php endforeach ?>
-                </div><h3>Pemeriksaan sebelum posting</h3><ul><?php foreach ($variant['checks'] as $check): ?><li><?= escape($check) ?></li><?php endforeach ?></ul></details>
+                </div>
+                <?php require __DIR__ . '/ai-image-form.php'; ?>
+                <h3>Pemeriksaan sebelum posting</h3><ul><?php foreach ($variant['checks'] as $check): ?><li><?= escape($check) ?></li><?php endforeach ?></ul></details>
             <?php endforeach ?>
             <?php if ($detail['content_id'] === null): ?>
                 <form class="ai-action-form" method="post" action="<?= escape($detailAction) ?>">
@@ -80,6 +82,7 @@ $studioBase = $app->url('admin') . '&' . http_build_query(['section' => 'ai', 'c
                     <label><input type="checkbox" name="confirm_draft" value="1" required> Simpan sebagai Draft AI yang masih perlu review, bukan persetujuan atau publikasi.</label><button class="calendar-primary" type="submit">Simpan ke Ide &amp; Draft</button>
                 </form>
             <?php else: ?><a class="calendar-primary" href="<?= escape($app->url('admin') . '&section=content&id=' . (int) $detail['content_id']) ?>">Buka Draft AI tersimpan</a><?php endif ?>
+            <?php require __DIR__ . '/ai-images.php'; ?>
         <?php endif ?>
     </div>
 </section>

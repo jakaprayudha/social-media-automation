@@ -74,6 +74,7 @@ final class ContentLibrary
             $query->execute($parameters);
             $items = $query->fetchAll();
             $detail = null;
+            $images = [];
             if ($id !== null) {
                 $query = $db->prepare($select . ' WHERE c.id = ? AND c.deleted_at IS NULL');
                 $query->execute([$id]);
@@ -82,8 +83,11 @@ final class ContentLibrary
                     || ($campaignId !== null && (int) $detail['campaign_id'] !== $campaignId)) {
                     throw new InvalidArgumentException('Konten tidak tersedia dalam perusahaan atau kampanye yang dipilih.');
                 }
+                $query = $db->prepare("SELECT id, draft_id, width, height FROM ai_images WHERE content_id = ? AND status = 'generated' ORDER BY id DESC");
+                $query->execute([$id]);
+                $images = $query->fetchAll();
             }
-            $result = compact('companies', 'campaigns', 'items', 'detail', 'total', 'pages', 'page', 'status', 'search');
+            $result = compact('companies', 'campaigns', 'items', 'detail', 'images', 'total', 'pages', 'page', 'status', 'search');
             $result['selected_company'] = $selectedCompany;
             $result['selected_campaign'] = $selectedCampaign;
             $db->commit();

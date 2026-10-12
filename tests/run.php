@@ -981,6 +981,8 @@ try {
         'Library rejects cross-company detail and campaign scope');
     require __DIR__ . '/ai.php';
     testAiStudio($app, $userId, $companyIds, $adminUrl, $jar, $directory);
+    require __DIR__ . '/images.php';
+    testAiImages($app, $userId, $adminUrl, $jar);
     foreach ($sections as $key => $item) {
         $menuPage = request($adminUrl . '&section=' . $key, $jar);
         if ($item['later'] ?? false) {

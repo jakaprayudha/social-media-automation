@@ -75,6 +75,9 @@ $contentCatalog = $contentData;
         </dl>
         <a class="calendar-secondary" href="<?= escape($app->url('admin') . '&' . http_build_query(['section' => 'calendar', 'company' => $detail['company_id'], 'month' => $calendarMonth])) ?>">Buka kalender perusahaan</a>
         <?php if ($detail['ai_draft_id'] !== null): ?><a class="calendar-secondary" href="<?= escape($app->url('admin') . '&section=ai&id=' . (int) $detail['ai_draft_id'] . '#ai-detail') ?>">Lihat hasil AI per platform</a><?php endif ?>
+        <?php foreach ($contentData['images'] as $image): ?>
+            <figure><img class="ai-image-preview" src="<?= escape($app->url('admin') . '&section=ai&id=' . (int) $image['draft_id'] . '&image=' . (int) $image['id']) ?>" alt="<?= escape('Aset gambar AI: ' . $detail['title']) ?>" loading="lazy"><figcaption>Gambar AI terkait · <?= (int) $image['width'] ?> × <?= (int) $image['height'] ?> · Belum dipublikasikan</figcaption></figure>
+        <?php endforeach ?>
         <?php if ($detail['campaign_id'] !== null): ?><a class="calendar-secondary" href="<?= escape($app->url('admin') . '&section=campaigns&id=' . (int) $detail['campaign_id']) ?>">Buka kampanye</a>
         <?php else: ?><p>Kaitkan Ide/Brief ke kampanye melalui detail kampanye. Perusahaan dan kaitan yang sudah ada tidak diubah saat edit.</p><?php endif ?>
         <?php if (isset(ContentEditor::INITIAL_STATUSES[$detail['status']])): ?>

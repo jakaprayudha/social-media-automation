@@ -15,6 +15,7 @@ return [
         'api_key' => getenv('GEMINI_API_KEY') ?: '',
         'model' => getenv('GEMINI_MODEL') ?: 'gemini-3.8-flash',
         'timeout_seconds' => 60,
+        'image_model' => 'gemini-2.5-flash-image',
     ],
     'mail' => [
         'transport' => 'smtp', // file is allowed only in development

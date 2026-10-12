@@ -5,7 +5,7 @@ Aplikasi internal HTML/CSS/JavaScript + PHP + SQLite untuk Social Media Automati
 ## Cakupan saat ini
 
 - Login, lupa kata sandi, kata sandi baru, dan logout.
-- Setelah login menampilkan dashboard admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Dashboard, kalender, kampanye, Ide & draft, dan Studio AI sudah tersedia; menu lain tetap placeholder. RBAC per perusahaan, editor lengkap, generasi file media, dan publikasi **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
+- Setelah login menampilkan dashboard admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Dashboard, kalender, kampanye, Ide & draft, dan Studio AI (teks serta gambar) sudah tersedia; menu lain tetap placeholder. RBAC per perusahaan, editor lengkap, video/audio final, dan publikasi **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
 - Kampanye (`index.php?page=admin&section=campaigns`) menyediakan daftar/filter perusahaan/status, tambah/edit, detail tujuan/tema/periode/pemilik, jumlah konten/terbit, dan arsip dengan konfirmasi. Status kampanye: Draft, Aktif, Selesai, Diarsipkan; bukan status publikasi. Perusahaan wajib aktif saat tambah/edit dan tidak dapat diganti setelah dibuat. Periode adalah tanggal lokal perusahaan (2000–2099), bukan waktu UTC. Tidak ada kampanye demo atau publikasi otomatis.
 - Kampanye dapat dikaitkan ke konten baru lewat form kalender atau Ide/Brief yang belum memiliki kampanye melalui detail kampanye. Database dan server memastikan perusahaan sama; hanya kampanye nonarsip/perusahaan aktif menerima konten baru. Kalender memiliki filter kampanye dan nama kampanye pada detail konten. Arsip tidak menghapus konten; konten terhapus tidak masuk jumlah/detail kampanye. Tidak tersedia pemindahan/pelepasan asosiasi, pemulihan arsip, atau otomatisasi konten berbasis kampanye.
 - Semua perubahan kampanye memakai POST+CSRF dan audit. Token pembuatan mencegah duplikasi; versi edit/arsip menolak form lama yang bertabrakan dengan perubahan admin lain. Filter invalid ditolak, error form mempertahankan input yang di-escape. Periode kampanye merupakan panduan perencanaan, bukan pembatas tanggal konten; konten di luar periode tetap dapat dikaitkan.
@@ -66,7 +66,7 @@ Edit hanya berlaku pada Ide/Brief di perusahaan aktif: judul, brief, format, sta
 
 Menu `index.php?page=admin&section=ai` menyimpan brief lokal untuk Blog, Konten umum, Instagram, YouTube, TikTok, dan Facebook. Pilih perusahaan/kampanye, topik, brief, audiens, gaya, fakta publik, platform, serta jenis hasil yang direncanakan. Brief immutable; revisi/regenerasi hasil sukses dilakukan dengan brief baru. Daftar menampilkan maksimal 50 brief terbaru sesuai perusahaan; detail yang lebih lama tetap tersedia lewat ID.
 
-Generasi menghasilkan artikel Markdown, caption/deskripsi, judul SEO, hook, skrip/storyboard, CTA, hashtag, alt text, brief gambar/video, naskah audio, dan pemeriksaan wajib per platform. **Tidak menghasilkan file gambar, video, atau audio; tidak menerima upload/analisis media dan tidak mempublikasikan posting.** Hasil masih perlu kurasi fakta, lisensi/disclosure, serta aset final. Hasil tampil sebagai teks ter-escape yang bisa disalin dari textarea atau diunduh sebagai `.txt`.
+Generasi teks menghasilkan artikel Markdown, caption/deskripsi, judul SEO, hook, skrip/storyboard, CTA, hashtag, alt text, brief gambar/video, naskah audio, dan pemeriksaan wajib per platform. **File gambar dibuat melalui aksi Generate gambar terpisah di bawah brief visual. Tidak menghasilkan file video/audio, menerima upload/analisis media, atau mempublikasikan posting.** Hasil masih perlu kurasi fakta dan lisensi/disclosure. Hasil teks tampil ter-escape yang bisa disalin dari textarea atau diunduh sebagai `.txt`.
 
 Pada instalasi lama, backup konsisten lalu jalankan `php bin/console.php migrate` untuk `007_ai_studio.sql`. Tambahkan blok ini ke array konfigurasi privat `config/local.php` (jangan mengganti konfigurasi autentikasi/mail atau app key):
 
@@ -76,6 +76,7 @@ Pada instalasi lama, backup konsisten lalu jalankan `php bin/console.php migrate
     'api_key' => getenv('GEMINI_API_KEY') ?: '',
     'model' => getenv('GEMINI_MODEL') ?: 'gemini-3.8-flash',
     'timeout_seconds' => 60,
+    'image_model' => 'gemini-2.5-flash-image',
 ],
 ```
 
@@ -93,7 +94,19 @@ Worker memproses satu brief per eksekusi, tanpa menahan transaksi database selam
 
 Klaim antrean memakai transaksi/lease 180 detik sehingga worker paralel tidak menggandakan permintaan. Kegagalan/timeout tercatat dengan kode aman dan alasan di UI; job melewati lease menjadi gagal saat worker berikutnya berjalan. Tidak ada retry otomatis: timeout mungkin tetap dikenai biaya oleh provider, periksa akun sebelum retry manual (maksimal tiga percobaan per brief). Worker memeriksa ulang admin/perusahaan/kampanye sebelum permintaan; tidak mengirim kredensial atau data pengguna internal ke prompt.
 
-**Simpan ke Ide & Draft** membutuhkan konfirmasi dan menyimpan satu item `ai_draft` dengan varian per platform, model/prompt metadata dan tautan kembali ke Studio. Simpan ulang tidak menggandakan item/varian; tidak memberi tanggal rencana, persetujuan, jadwal, atau status Terbit. Kampanye wajib nonarsip pada kaitan baru; arsip setelah generasi tidak membolehkan kaitan baru. Audio disimpan sebagai format Teks karena yang tersedia baru naskah, bukan berkas audio. Pengeditan hasil, template, approval, dan file media final merupakan tahap berikutnya.
+**Simpan ke Ide & Draft** membutuhkan konfirmasi dan menyimpan satu item `ai_draft` dengan varian per platform, model/prompt metadata dan tautan kembali ke Studio. Simpan ulang tidak menggandakan item/varian; tidak memberi tanggal rencana, persetujuan, jadwal, atau status Terbit. Kampanye wajib nonarsip pada kaitan baru; arsip setelah generasi tidak membolehkan kaitan baru. Audio disimpan sebagai format Teks karena yang tersedia baru naskah, bukan berkas audio. Pengeditan hasil, template, approval, dan video/audio final merupakan tahap berikutnya.
+
+### Generate gambar langsung dari Studio AI
+
+Migrasi `008_ai_images.sql` menambahkan riwayat gambar privat dan kaitan aset konten. Di detail hasil teks, buka **Generate gambar dari brief** pada platform tujuan. Prompt awal memakai `image_brief`; pengguna dapat merevisi prompt (1–4.000 karakter), memilih gaya fotografi/ilustrasi/minimalis dan rasio 1:1, 4:5, 9:16, atau 16:9. Konfirmasi pengiriman prompt/topik/brief/gaya/platform ke Google serta biaya API, kemudian klik **Generate gambar**.
+
+Berbeda dari teks, gambar diproses langsung dalam POST browser hingga 90 detik, tanpa worker terminal/scheduler. Hosting/proxy perlu mendukung request tersebut; jangan refresh/klik ulang saat diproses. Token anti-duplikasi dan satu permintaan aktif per draft mencegah generate ganda; maksimal 10 permintaan gambar per draft, termasuk gagal. Tidak ada retry otomatis atau model fallback. Revisi prompt dan generate baru tidak mengubah gambar sebelumnya. Permintaan terhenti melewati 180 detik dapat digantikan saat permintaan baru; cek biaya provider sebelum mencoba ulang.
+
+`ai.image_model` wajib model gambar Gemini yang tersedia bagi akun (default kompatibel `gemini-2.5-flash-image`). Gambar dibuat tanpa teks/logo/harga/klaim; tambahkan headline/logo resmi melalui alat desain terpisah. Output wajib gambar PNG/JPEG/WebP, maksimal 10 MB, dimensi maksimal 8192, rasio dalam toleransi 3%; teks saja atau output diblokir/rasio salah ditampilkan gagal, bukan preview palsu. Tidak mendukung edit image-to-image/upload referensi; revisi saat ini adalah text-to-image baru.
+
+File persisten disimpan di `var/ai-images` di luar public (direktori 0700, file 0600). Preview dan unduh memakai endpoint same-origin yang memerlukan session admin dan memeriksa kaitan gambar/draft; nama file internal tidak diterima dari URL. Riwayat menampilkan preview, prompt, dimensi, model, dan alasan gagal. Gambar tersimpan otomatis sebagai aset Studio; **Simpan sebagai aset konten** memerlukan hasil teks sudah disimpan ke Ide & Draft serta konfirmasi pemeriksaan, kemudian menautkan gambar ke konten tersebut. Preview terkait juga terlihat di detail konten. Tidak mengubah status persetujuan/jadwal atau menerbitkan posting. Menu Aset media umum tetap belum diimplementasikan.
+
+Key yang terpapar harus dicabut dan diganti langsung di konfigurasi privat. Tes generasi gambar memakai fixture PNG lokal dan tidak menggunakan API key nyata; konektivitas/generasi berbayar perlu verifikasi setelah key pengganti dikonfigurasi.
 
 Alternatif CLI:
 

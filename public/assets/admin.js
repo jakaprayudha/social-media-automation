@@ -1,5 +1,18 @@
 'use strict';
 
+document.querySelectorAll('form').forEach((form) => {
+    if (form.querySelector('input[name="action"][value="generate_image"]')) {
+        form.addEventListener('submit', () => {
+            const button = form.querySelector('button[type="submit"]');
+            if (button) {
+                button.disabled = true;
+                button.textContent = 'Membuat gambar... tunggu hingga 90 detik';
+            }
+            form.setAttribute('aria-busy', 'true');
+        });
+    }
+});
+
 const toggle = document.querySelector('.menu-toggle');
 const sidebar = document.getElementById('admin-sidebar');
 const shell = document.querySelector('.admin-shell');

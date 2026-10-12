@@ -212,6 +212,7 @@ main { padding: 39px 36px; outline: none; }
 .ai-result .content-form-grid { margin-top: 18px; }
 .ai-result h3, .ai-result li { font-size: 12px; color: #766783; }
 .ai-result textarea { resize: vertical; }
+.ai-image-preview { display: block; max-width: 100%; max-height: 620px; width: auto; height: auto; border-radius: 9px; margin: 16px 0; }
 @media (max-width: 1250px) {
     .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .dashboard-heading { flex-direction: column; }

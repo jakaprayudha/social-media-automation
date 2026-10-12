@@ -153,9 +153,17 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 - API key/model/timeout berada di konfigurasi privat. Tanpa konfigurasi valid, generate dinonaktifkan dan POST ditolak jelas; simpan brief tetap tersedia. Key dan metadata pengguna internal tidak dikirim ke prompt/UI/log.
 - POST generate wajib CSRF, versi, dan persetujuan pengiriman informasi publik ke Google Gemini serta biaya. Antrean persisten diproses worker CLI `ai:work`, satu brief per eksekusi; tidak ada scheduler AI yang dipasang otomatis. GET/status tidak menjalankan generasi.
 - Worker mengklaim transaksional dengan lease 180 detik, tidak menahan transaksi selama API, memeriksa ulang scope, validasi output JSON lengkap per platform, menyimpan model/prompt version, dan mencatat kegagalan aman. Retry hanya manual maksimal tiga, timeout/lease habis ditampilkan sebagai gagal dan dapat tetap dikenai biaya. Tidak ada fallback simulasi.
-- Output teks: artikel Markdown, caption/deskripsi, judul, SEO, hook, skrip/storyboard, CTA, hashtag, alt text, brief gambar/video, naskah audio, dan checklist verifikasi. Tidak menghasilkan file media, menerima upload/analisis media, atau menjamin siap post. UI menyatakan batas kemampuan secara eksplisit.
+- Output teks: artikel Markdown, caption/deskripsi, judul, SEO, hook, skrip/storyboard, CTA, hashtag, alt text, brief gambar/video, naskah audio, dan checklist verifikasi. Gambar final tersedia lewat aksi terpisah di bagian 5.8; belum ada video/audio final, upload/analisis media, atau jaminan siap post.
 - Hasil ter-escape dapat disalin/ekspor `.txt` atau disimpan sebagai satu Draft AI dengan varian per platform. Simpan ulang idempoten; tidak menyetujui, memberi jadwal, atau mempublikasikan. Detail konten menautkan hasil Studio. Pengeditan hasil, approval, dan media final menyusul.
 - Tes memakai provider fixture lokal tanpa panggilan eksternal: validasi, CSRF/consent, scope, malformed JSON/hasil tidak lengkap, error/timeout, retry cap, worker paralel, ekspor dan escaping, serta simpan varian/idempotensi.
+
+### 5.8 Generasi gambar dari brief AI
+
+- Detail hasil teks menyediakan Generate gambar per platform dengan prompt awal dari brief gambar. Prompt dapat direvisi, rasio 1:1/4:5/9:16/16:9, dan gaya fotografi/ilustrasi/minimalis. Persetujuan biaya/pengiriman data, CSRF, token anti-duplikasi, admin/perusahaan aktif wajib.
+- Proses langsung saat POST, timeout 90 detik, tidak memerlukan worker terminal. Satu permintaan aktif per draft, maksimal 10 permintaan termasuk gagal, tanpa retry otomatis/fallback. Regenerasi membuat gambar baru tanpa menimpa hasil lama.
+- Model gambar Gemini terkonfigurasi privat; visual tanpa teks/logo/claim, bukan video atau audio. Output PNG/JPEG/WebP <=10 MB, dimensi <=8192 dan rasio toleransi 3% wajib valid; kegagalan eksplisit dan tersimpan.
+- File privat di luar document root, preview/unduh admin-only sesuai draft. Riwayat prompt/dimensi/model/consent/status disimpan migrasi 008. Aset dapat dikaitkan idempoten ke konten draft terkait setelah konfirmasi; preview juga tampil di detail konten. Tidak mempublikasikan atau mengubah persetujuan/jadwal.
+- Tes fixture tanpa API berbayar: validasi, CSRF/consent, duplikasi/cap, rasio/file/MIME, preview/download/scope, kegagalan dan pengaitan aset.
 
 ## 6. Ruang lingkup fitur
 
