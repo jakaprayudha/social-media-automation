@@ -41,7 +41,7 @@ $contentCatalog = $contentData;
             <?php foreach ($contentData['items'] as $item): ?>
                 <tr><td><strong><?= escape($item['title']) ?></strong><small><?= escape($item['company_name']) ?></small><small>Pemilik: <?= escape($item['owner_name']) ?></small></td>
                     <td><span class="status-pill"><?= escape(Dashboard::STATUSES[$item['status']]) ?></span><small><?= escape(ContentEditor::FORMATS[$item['format']] ?? $item['format']) ?></small></td>
-                    <td><?= escape($item['campaign_name'] ?? 'Tanpa kampanye') ?><small><?= $item['observance_id'] === null ? 'Manual' : 'Ide peringatan otomatis' ?></small></td>
+                    <td><?= escape($item['campaign_name'] ?? 'Tanpa kampanye') ?><small><?= $item['ai_draft_id'] !== null ? 'Studio AI' : ($item['observance_id'] === null ? 'Manual' : 'Ide peringatan otomatis') ?></small></td>
                     <td><?= $item['planned_at'] === null ? 'Belum bertanggal' : escape(dashboardTime((int) $item['planned_at'], $item['company_timezone'])) ?><small><?= escape($item['company_timezone']) ?></small></td>
                     <td><a class="campaign-detail-link" href="<?= escape($contentBase . '&id=' . (int) $item['id'] . '#content-detail') ?>">Lihat detail</a></td></tr>
             <?php endforeach ?>
@@ -71,9 +71,10 @@ $contentCatalog = $contentData;
             <dt>Tanggal rencana</dt><dd><?= $detail['planned_at'] === null ? 'Belum bertanggal' : escape(dashboardTime((int) $detail['planned_at'], $detail['company_timezone'])) ?> · <?= escape($detail['company_timezone']) ?></dd>
             <dt>Jadwal publikasi tersimpan</dt><dd><?= $detail['scheduled_at'] === null ? 'Belum dijadwalkan' : escape(dashboardTime((int) $detail['scheduled_at'], $detail['company_timezone'])) ?></dd>
             <dt>Kampanye</dt><dd><?= escape($detail['campaign_name'] ?? 'Tanpa kampanye') ?></dd>
-            <dt>Asal konten</dt><dd><?= $detail['observance_id'] === null ? 'Manual' : 'Ide otomatis dari peringatan tahunan; menghapusnya tidak membuat ide ini muncul kembali.' ?></dd>
+            <dt>Asal konten</dt><dd><?= $detail['ai_draft_id'] !== null ? 'Draft teks dari Studio AI; aset final dan persetujuan belum tersedia.' : ($detail['observance_id'] === null ? 'Manual' : 'Ide otomatis dari peringatan tahunan; menghapusnya tidak membuat ide ini muncul kembali.') ?></dd>
         </dl>
         <a class="calendar-secondary" href="<?= escape($app->url('admin') . '&' . http_build_query(['section' => 'calendar', 'company' => $detail['company_id'], 'month' => $calendarMonth])) ?>">Buka kalender perusahaan</a>
+        <?php if ($detail['ai_draft_id'] !== null): ?><a class="calendar-secondary" href="<?= escape($app->url('admin') . '&section=ai&id=' . (int) $detail['ai_draft_id'] . '#ai-detail') ?>">Lihat hasil AI per platform</a><?php endif ?>
         <?php if ($detail['campaign_id'] !== null): ?><a class="calendar-secondary" href="<?= escape($app->url('admin') . '&section=campaigns&id=' . (int) $detail['campaign_id']) ?>">Buka kampanye</a>
         <?php else: ?><p>Kaitkan Ide/Brief ke kampanye melalui detail kampanye. Perusahaan dan kaitan yang sudah ada tidak diubah saat edit.</p><?php endif ?>
         <?php if (isset(ContentEditor::INITIAL_STATUSES[$detail['status']])): ?>
@@ -82,7 +83,7 @@ $contentCatalog = $contentData;
                 <label><input type="checkbox" name="confirm_delete" value="1" required> Saya yakin menghapus konten ini dari daftar dan kalender.</label>
                 <button class="calendar-danger" type="submit">Hapus konten</button>
             </form>
-        <?php else: ?><p>Konten tahap lanjut hanya dapat dibaca. Pengeditan draft AI, review, dan publikasi belum tersedia.</p><?php endif ?>
+        <?php else: ?><p>Konten tahap lanjut hanya dapat dibaca. Hasil Studio AI dapat dibuka melalui tautan di atas bila tersedia; pengeditan hasil, review, dan publikasi belum tersedia.</p><?php endif ?>
     </div>
 </section>
 <?php endif ?>

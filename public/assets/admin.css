@@ -196,6 +196,22 @@ main { padding: 39px 36px; outline: none; }
 .content-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px 24px; font-size: 11px; color: #766783; }
 .content-delete-form { margin-top: 24px; border-top: 1px solid #e4dfeb; padding-top: 16px; font-size: 12px; color: #a74051; }
 .content-delete-form label { flex-basis: 100%; }
+.ai-capabilities { margin: 24px 0; }
+.ai-capability-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 0 24px 18px; }
+.ai-capability-grid > div { border: 1px solid #ebe7f1; border-radius: 9px; padding: 15px; }
+.ai-capability-grid .icon { color: var(--purple); }
+.ai-capability-grid h3 { font-size: 12px; margin: 7px 0; }
+.ai-capability-grid p, .ai-capability-grid small { font-size: 11px; color: #766783; }
+.ai-platforms { display: flex; flex-wrap: wrap; gap: 12px; border: 1px solid #e4dfeb; border-radius: 8px; padding: 14px; margin: 0 0 20px; font-size: 12px; }
+.ai-platforms legend { color: #766783; padding: 0 5px; }
+.ai-action-form { margin: 24px 0; font-size: 12px; }
+.ai-action-form label { flex-basis: 100%; }
+.ai-action-form button:disabled { cursor: not-allowed; opacity: .5; }
+.ai-result { border: 1px solid #e4dfeb; border-radius: 8px; margin: 22px 0; padding: 18px; }
+.ai-result summary { color: var(--purple); font-weight: 600; cursor: pointer; overflow-wrap: anywhere; }
+.ai-result .content-form-grid { margin-top: 18px; }
+.ai-result h3, .ai-result li { font-size: 12px; color: #766783; }
+.ai-result textarea { resize: vertical; }
 @media (max-width: 1250px) {
     .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .dashboard-heading { flex-direction: column; }
@@ -203,6 +219,7 @@ main { padding: 39px 36px; outline: none; }
     .dashboard-bottom { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
+    .ai-capability-grid { grid-template-columns: minmax(0, 1fr); padding-left: 20px; padding-right: 20px; }
     .admin-shell { grid-template-columns: minmax(0, 1fr); }
     .sidebar { position: static; height: auto; max-height: none; }
     .brand { margin-bottom: 20px; }

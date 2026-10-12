@@ -91,6 +91,7 @@ try {
             exit;
         }
         $adminActions = [
+            'ai' => ['create_ai_brief', 'generate_ai', 'save_ai_content'],
             'content' => ['create_content', 'update_content', 'delete_content'],
             'calendar' => ['create_content', 'delete_content', 'automation_enable', 'automation_disable', 'generate_ideas'],
             'campaigns' => ['create_campaign', 'update_campaign', 'archive_campaign', 'assign_content'],
@@ -101,6 +102,38 @@ try {
             http_response_code(405);
             echo 'Tindakan pada menu admin tidak tersedia.';
             exit;
+        }
+        if ($section === 'ai') {
+            $_SESSION['ai_creation_key'] ??= bin2hex(random_bytes(32));
+            $aiForm = ['title' => '', 'brief' => '', 'audience' => '', 'tone' => 'Profesional dan ramah',
+                'facts' => '', 'company_id' => '', 'campaign_id' => '', 'media_type' => 'text',
+                'creation_key' => $_SESSION['ai_creation_key']];
+            $aiPlatforms = ['instagram'];
+            $aiFormOpen = false;
+            $companyInput = $_GET['company'] ?? 'all';
+            $detailInput = $_GET['id'] ?? null;
+            try {
+                if (!is_string($companyInput) || ($companyInput !== 'all' && !preg_match('/\A[1-9][0-9]{0,8}\z/', $companyInput))
+                    || ($detailInput !== null && (!is_string($detailInput) || !preg_match('/\A[1-9][0-9]{0,8}\z/', $detailInput)))) {
+                    throw new InvalidArgumentException('Filter perusahaan atau ID brief tidak valid.');
+                }
+                $studioData = (new AiStudio($app))->snapshot($companyInput === 'all' ? null : (int) $companyInput,
+                    $detailInput === null ? null : (int) $detailInput);
+                if (isset($_GET['download'])) {
+                    if ($method !== 'GET' || $_GET['download'] !== '1' || $studioData['detail'] === null) {
+                        throw new InvalidArgumentException('Ekspor tidak tersedia.');
+                    }
+                    $export = AiStudio::export($studioData['detail']);
+                    header('Content-Type: text/plain; charset=UTF-8');
+                    header('Content-Disposition: attachment; filename="studio-ai-' . (int) $studioData['detail']['id'] . '.txt"');
+                    echo $export;
+                    exit;
+                }
+            } catch (InvalidArgumentException $validationError) {
+                http_response_code(400);
+                echo escape($validationError->getMessage());
+                exit;
+            }
         }
         if (in_array($section, ['calendar', 'content'], true)) {
             $_SESSION['content_creation_key'] ??= bin2hex(random_bytes(32));
@@ -282,6 +315,56 @@ try {
             $auth->clearSession();
             $_SESSION['notice'] = 'Anda telah keluar dari akun.';
             redirectTo($app->url());
+        } elseif ($page === 'admin' && $section === 'ai') {
+            try {
+                $action = formField('action');
+                $studio = new AiStudio($app);
+                if ($action === 'create_ai_brief') {
+                    $aiFormOpen = true;
+                    foreach (array_keys($aiForm) as $field) {
+                        $aiForm[$field] = formField($field);
+                    }
+                    $aiPlatforms = $_POST['platforms'] ?? [];
+                    if (!is_array($aiPlatforms) || !array_is_list($aiPlatforms)
+                        || count($aiPlatforms) > count(AiStudio::PLATFORMS)) {
+                        $aiPlatforms = [];
+                        throw new InvalidArgumentException('Pilihan platform tidak valid.');
+                    }
+                    foreach ($aiPlatforms as $platform) {
+                        if (!is_string($platform) || !isset(AiStudio::PLATFORMS[$platform])) {
+                            $aiPlatforms = [];
+                            throw new InvalidArgumentException('Pilihan platform tidak valid.');
+                        }
+                    }
+                    if (!hash_equals($_SESSION['ai_creation_key'], $aiForm['creation_key'])) {
+                        throw new InvalidArgumentException('Form brief sudah digunakan atau kedaluwarsa. Muat ulang halaman.');
+                    }
+                    $id = $studio->create($aiForm, $aiPlatforms, (int) $user['id']);
+                    $_SESSION['ai_creation_key'] = bin2hex(random_bytes(32));
+                    $_SESSION['notice'] = 'Brief tersimpan secara lokal. Belum dikirim ke Gemini.';
+                    redirectTo($app->url('admin') . '&section=ai&id=' . $id . '#ai-detail');
+                }
+                $idInput = formField('draft_id');
+                if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $idInput) || $studioData['detail'] === null
+                    || (int) $studioData['detail']['id'] !== (int) $idInput) {
+                    throw new InvalidArgumentException('Brief pada form tidak sesuai dengan detail halaman.');
+                }
+                if ($action === 'save_ai_content') {
+                    $contentId = $studio->saveContent((int) $idInput, (int) $user['id'], formField('confirm_draft') === '1');
+                    $_SESSION['notice'] = 'Hasil disimpan sebagai Draft AI, belum disetujui atau dipublikasikan.';
+                    redirectTo($app->url('admin') . '&section=content&id=' . $contentId);
+                }
+                $versionInput = formField('version');
+                if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $versionInput)) {
+                    throw new InvalidArgumentException('Versi brief tidak valid.');
+                }
+                $studio->queue((int) $idInput, (int) $versionInput, (int) $user['id'], formField('consent') === '1');
+                $_SESSION['notice'] = 'Generasi masuk antrean. Worker ai:work harus berjalan; belum ada hasil atau publikasi.';
+                redirectTo($app->url('admin') . '&section=ai&id=' . (int) $idInput . '#ai-detail');
+            } catch (InvalidArgumentException $validationError) {
+                http_response_code(422);
+                $error = $validationError->getMessage();
+            }
         } elseif ($page === 'admin' && $section === 'content') {
             try {
                 $action = formField('action');

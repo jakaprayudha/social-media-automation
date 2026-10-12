@@ -64,10 +64,11 @@ final class ContentLibrary
             if ($page > $pages) {
                 throw new InvalidArgumentException('Halaman konten tidak tersedia.');
             }
-            $select = 'SELECT c.*, co.name AS company_name, co.timezone AS company_timezone,
+            $select = 'SELECT c.*, a.id AS ai_draft_id, co.name AS company_name, co.timezone AS company_timezone,
                 co.status AS company_status, u.name AS owner_name, ca.name AS campaign_name
                 FROM content_items c JOIN companies co ON co.id = c.company_id
-                JOIN users u ON u.id = c.owner_id LEFT JOIN campaigns ca ON ca.id = c.campaign_id';
+                JOIN users u ON u.id = c.owner_id LEFT JOIN campaigns ca ON ca.id = c.campaign_id
+                LEFT JOIN ai_drafts a ON a.content_id = c.id';
             $query = $db->prepare($select . ' WHERE ' . $scope . ' ORDER BY c.updated_at DESC, c.id DESC
                 LIMIT 20 OFFSET ' . (($page - 1) * 20));
             $query->execute($parameters);

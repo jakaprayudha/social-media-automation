@@ -92,7 +92,7 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 
 - Setelah login admin sistem diarahkan ke kerangka admin; semua URL menu dilindungi autentikasi dan pemeriksaan role server. Hak akses perusahaan/peran lain tetap belum diimplementasikan pada tahap ini.
 - Sidebar dikelompokkan menjadi: Ruang kerja (Dashboard, Kalender konten, Kampanye); Editorial (Ide & draft konten, Studio AI, Aset media, Template konten, Persetujuan); Publikasi (Antrean & jadwal, Riwayat & kegagalan, Akun kanal); Organisasi (Perusahaan, Profil merek, Pengguna & hak akses); Laporan & sistem (Laporan & ekspor, Metrik engagement, Audit log, Pengaturan).
-- Pada tahap sidebar, menu mengarah ke placeholder yang hanya menampilkan judul dan pemberitahuan bahwa isi/fungsi menyusul. Dashboard, kalender, kampanye, dan konten kemudian diimplementasikan sebagaimana bagian 5.3–5.6; menu lain tetap placeholder. Tidak ada statistik, koneksi, notifikasi, atau tindakan bisnis palsu.
+- Pada tahap sidebar, menu mengarah ke placeholder yang hanya menampilkan judul dan pemberitahuan bahwa isi/fungsi menyusul. Dashboard, kalender, kampanye, konten, dan Studio AI kemudian diimplementasikan sebagaimana bagian 5.3–5.7; menu lain tetap placeholder. Tidak ada statistik, koneksi, notifikasi, atau tindakan bisnis palsu.
 - Metrik engagement diberi label Fase 3, nonaktif, dan tidak menyediakan route aktif. Komentar/DM, iklan, dan fitur di luar PRD tidak ditambahkan.
 - Sidebar memiliki menu aktif, ikon lokal, identitas akun, logout POST+CSRF, dan tombol buka/tutup yang responsif. Navigasi tetap tersedia tanpa JavaScript; menu/section tidak dikenal ditolak, bukan diarahkan diam-diam ke menu lain.
 - Uji penerimaan: tamu/session kedaluwarsa tidak dapat masuk, login mengarah ke shell, semua menu aktif dapat dipilih dengan tepat satu penanda aktif, route fase lanjut/mutasi placeholder ditolak, logout berfungsi, serta tampilan Herd dan mobile tetap normal.
@@ -146,6 +146,16 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 - Edit dibatasi server pada Ide/Brief di perusahaan aktif: judul, brief, format, status Ide/Brief, dan rencana lokal. Pemilik, perusahaan, kampanye, jadwal publikasi, dan identitas peringatan tetap. Kaitan baru dibuat melalui detail kampanye; kaitan arsip yang sudah ada tetap dipertahankan.
 - Migrasi 006 menambahkan versi konten. Setiap perubahan konten menaikkan versi, termasuk kaitan kampanye dan penghapusan. Edit dari form lama ditolak tanpa menimpa data; kesalahan validasi mempertahankan input dan versi yang diajukan.
 - Hapus memakai aturan soft-delete Ide/Brief dengan checkbox konfirmasi dan CSRF, menghilangkan konten dari daftar/kalender/kampanye/dashboard. Status tahap lanjut hanya dibaca; tidak ada AI, review, atau publikasi pada halaman ini.
+
+### 5.7 Studio AI — Gemini tahap teks
+
+- Admin sistem aktif membuat brief lokal immutable dengan perusahaan aktif, kampanye nonarsip opsional, topik, tujuan/brief, audiens, gaya, fakta publik, media yang direncanakan, dan satu atau lebih platform: Blog, Konten umum, Instagram, YouTube, TikTok, Facebook. Riwayat maksimal 50 terbaru sesuai perusahaan, detail tetap tersimpan.
+- API key/model/timeout berada di konfigurasi privat. Tanpa konfigurasi valid, generate dinonaktifkan dan POST ditolak jelas; simpan brief tetap tersedia. Key dan metadata pengguna internal tidak dikirim ke prompt/UI/log.
+- POST generate wajib CSRF, versi, dan persetujuan pengiriman informasi publik ke Google Gemini serta biaya. Antrean persisten diproses worker CLI `ai:work`, satu brief per eksekusi; tidak ada scheduler AI yang dipasang otomatis. GET/status tidak menjalankan generasi.
+- Worker mengklaim transaksional dengan lease 180 detik, tidak menahan transaksi selama API, memeriksa ulang scope, validasi output JSON lengkap per platform, menyimpan model/prompt version, dan mencatat kegagalan aman. Retry hanya manual maksimal tiga, timeout/lease habis ditampilkan sebagai gagal dan dapat tetap dikenai biaya. Tidak ada fallback simulasi.
+- Output teks: artikel Markdown, caption/deskripsi, judul, SEO, hook, skrip/storyboard, CTA, hashtag, alt text, brief gambar/video, naskah audio, dan checklist verifikasi. Tidak menghasilkan file media, menerima upload/analisis media, atau menjamin siap post. UI menyatakan batas kemampuan secara eksplisit.
+- Hasil ter-escape dapat disalin/ekspor `.txt` atau disimpan sebagai satu Draft AI dengan varian per platform. Simpan ulang idempoten; tidak menyetujui, memberi jadwal, atau mempublikasikan. Detail konten menautkan hasil Studio. Pengeditan hasil, approval, dan media final menyusul.
+- Tes memakai provider fixture lokal tanpa panggilan eksternal: validasi, CSRF/consent, scope, malformed JSON/hasil tidak lengkap, error/timeout, retry cap, worker paralel, ekspor dan escaping, serta simpan varian/idempotensi.
 
 ## 6. Ruang lingkup fitur
 

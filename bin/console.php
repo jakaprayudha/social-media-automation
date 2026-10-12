@@ -51,6 +51,7 @@ try {
             . "  calendar:generate [YEAR]   Generate missing ideas (defaults to current year)\n"
             . "  mail:work      Process up to 10 reset emails (cron-safe)\n"
             . "  mail:status    Show queue health without sensitive payloads\n"
+            . "  ai:work        Generate one queued AI brief using configured Gemini (may incur charges)\n"
             . "  preflight      Validate configuration and runtime\n";
         exit;
     }
@@ -77,6 +78,13 @@ try {
     }
     $app = bootstrap();
     switch ($command) {
+        case 'ai:work':
+            if (!Gemini::configured($app)) {
+                throw new RuntimeException('Gemini is not configured. Set private ai configuration before running the worker.');
+            }
+            $summary = (new AiWorker($app, new Gemini($app)))->run();
+            echo json_encode($summary, JSON_THROW_ON_ERROR), PHP_EOL;
+            exit($summary['failed'] > 0 ? 1 : 0);
         case 'migrate':
             $app->migrate();
             echo "Migrations applied.\n";

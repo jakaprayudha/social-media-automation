@@ -54,7 +54,7 @@ $title = $sections[$section]['label'];
         <header class="topbar">
             <button class="menu-toggle" type="button" aria-expanded="true" aria-controls="admin-sidebar" aria-label="Tutup menu admin" hidden><?= icon('menu') ?></button>
             <div class="breadcrumb"><span>Ruang kerja</span><span aria-hidden="true">/</span><strong><?= escape($title) ?></strong></div>
-            <span class="shell-badge"><?= in_array($section, ['dashboard', 'calendar', 'campaigns', 'content'], true) ? 'ADMIN LINTAS PERUSAHAAN' : 'PRATINJAU NAVIGASI' ?></span>
+            <span class="shell-badge"><?= in_array($section, ['dashboard', 'calendar', 'campaigns', 'content', 'ai'], true) ? 'ADMIN LINTAS PERUSAHAAN' : 'PRATINJAU NAVIGASI' ?></span>
         </header>
         <main id="main-content" tabindex="-1">
             <?php if ($error !== null): ?><p class="error-notice" role="alert"><?= escape($error) ?></p><?php endif ?>
@@ -67,6 +67,8 @@ $title = $sections[$section]['label'];
                 <?php require __DIR__ . '/campaigns.php'; ?>
             <?php elseif ($section === 'content'): ?>
                 <?php require __DIR__ . '/content.php'; ?>
+            <?php elseif ($section === 'ai'): ?>
+                <?php require __DIR__ . '/ai.php'; ?>
             <?php else: ?>
                 <div class="page-heading"><span>ADMIN WORKSPACE</span><h1><?= escape($title) ?></h1><p>Menu sudah tersedia. Isi dan fungsi halaman ini akan dikembangkan pada tahap berikutnya.</p></div>
             <?php endif ?>

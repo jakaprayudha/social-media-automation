@@ -334,7 +334,7 @@ try {
     $environment = getenv();
     $environment['APP_CONFIG'] = $configPath;
     $server = proc_open(
-        [PHP_BINARY, '-S', $address, '-t', $root . '/public'],
+        [PHP_BINARY, '-d', 'opcache.enable=0', '-S', $address, '-t', $root . '/public'],
         [0 => ['pipe', 'r'], 1 => ['file', $directory . '/server.log', 'a'], 2 => ['file', $directory . '/server.log', 'a']],
         $pipes, $root, $environment,
     );
@@ -979,6 +979,8 @@ try {
     check(request($libraryUrl . '&company=' . $companyIds[1] . '&id=' . $manualId, $jar)['status'] === 400
         && request($libraryUrl . '&company=' . $companyIds[1] . '&campaign=' . $campaignId, $jar)['status'] === 400,
         'Library rejects cross-company detail and campaign scope');
+    require __DIR__ . '/ai.php';
+    testAiStudio($app, $userId, $companyIds, $adminUrl, $jar, $directory);
     foreach ($sections as $key => $item) {
         $menuPage = request($adminUrl . '&section=' . $key, $jar);
         if ($item['later'] ?? false) {

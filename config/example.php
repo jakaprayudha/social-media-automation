@@ -10,6 +10,12 @@ return [
     'session_idle_seconds' => 1800,
     'session_lifetime_seconds' => 28800,
     'reset_lifetime_seconds' => 1800,
+    'ai' => [
+        'provider' => 'gemini',
+        'api_key' => getenv('GEMINI_API_KEY') ?: '',
+        'model' => getenv('GEMINI_MODEL') ?: 'gemini-3.8-flash',
+        'timeout_seconds' => 60,
+    ],
     'mail' => [
         'transport' => 'smtp', // file is allowed only in development
         'from_address' => '',

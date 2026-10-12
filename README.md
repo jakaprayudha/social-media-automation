@@ -5,12 +5,12 @@ Aplikasi internal HTML/CSS/JavaScript + PHP + SQLite untuk Social Media Automati
 ## Cakupan saat ini
 
 - Login, lupa kata sandi, kata sandi baru, dan logout.
-- Setelah login menampilkan dashboard admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Menu selain dashboard, kalender, dan kampanye tetap placeholder; RBAC per perusahaan, editor lengkap, dan publikasi **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
+- Setelah login menampilkan dashboard admin sistem dengan sidebar: dashboard, kalender, kampanye, editorial, publikasi, organisasi, laporan, audit, dan pengaturan. Dashboard, kalender, kampanye, Ide & draft, dan Studio AI sudah tersedia; menu lain tetap placeholder. RBAC per perusahaan, editor lengkap, generasi file media, dan publikasi **belum diimplementasikan**. Metrik engagement ditandai Fase 3 dan tidak dapat dibuka.
 - Kampanye (`index.php?page=admin&section=campaigns`) menyediakan daftar/filter perusahaan/status, tambah/edit, detail tujuan/tema/periode/pemilik, jumlah konten/terbit, dan arsip dengan konfirmasi. Status kampanye: Draft, Aktif, Selesai, Diarsipkan; bukan status publikasi. Perusahaan wajib aktif saat tambah/edit dan tidak dapat diganti setelah dibuat. Periode adalah tanggal lokal perusahaan (2000–2099), bukan waktu UTC. Tidak ada kampanye demo atau publikasi otomatis.
 - Kampanye dapat dikaitkan ke konten baru lewat form kalender atau Ide/Brief yang belum memiliki kampanye melalui detail kampanye. Database dan server memastikan perusahaan sama; hanya kampanye nonarsip/perusahaan aktif menerima konten baru. Kalender memiliki filter kampanye dan nama kampanye pada detail konten. Arsip tidak menghapus konten; konten terhapus tidak masuk jumlah/detail kampanye. Tidak tersedia pemindahan/pelepasan asosiasi, pemulihan arsip, atau otomatisasi konten berbasis kampanye.
 - Semua perubahan kampanye memakai POST+CSRF dan audit. Token pembuatan mencegah duplikasi; versi edit/arsip menolak form lama yang bertabrakan dengan perubahan admin lain. Filter invalid ditolak, error form mempertahankan input yang di-escape. Periode kampanye merupakan panduan perencanaan, bukan pembatas tanggal konten; konten di luar periode tetap dapat dikaitkan.
 - Kalender konten (`index.php?page=admin&section=calendar`) menampilkan bulan 2000–2099, navigasi bulan, filter perusahaan/status, detail, dan form **Tambah konten** tanpa JavaScript. Konten baru hanya berstatus Ide/Brief dengan perusahaan aktif, pemilik admin yang masuk, format, brief, dan tanggal rencana opsional. Form POST dilindungi CSRF dan token anti-duplikasi; validasi error mempertahankan input.
-- Kalender memakai `scheduled_at` bila ada, selain itu `planned_at` (timestamp UTC). Tanggal rencana bukan jadwal publikasi. Tampilan gabungan memakai Asia/Jakarta; pilihan satu perusahaan memakai zona waktu perusahaan. Input tanggal rencana memakai zona perusahaan, bukan zona browser. Bulan awal mengikuti Asia/Jakarta. Konten tanpa tanggal dihitung terpisah sepanjang periode. Edit Ide/Brief tersedia dari tautan detail ke halaman konten; belum ada AI generatif atau publikasi otomatis.
+- Kalender memakai `scheduled_at` bila ada, selain itu `planned_at` (timestamp UTC). Tanggal rencana bukan jadwal publikasi. Tampilan gabungan memakai Asia/Jakarta; pilihan satu perusahaan memakai zona waktu perusahaan. Input tanggal rencana memakai zona perusahaan, bukan zona browser. Bulan awal mengikuti Asia/Jakarta. Konten tanpa tanggal dihitung terpisah sepanjang periode. Edit Ide/Brief tersedia dari tautan detail ke halaman konten; generasi teks melalui Studio AI memerlukan konfigurasi Gemini. Tidak ada publikasi otomatis.
 - Klik nomor tanggal atau **+ Tambah** untuk membuka form dengan tanggal terisi pukul 09:00; dengan JavaScript, klik area kosong sel juga bisa dan input lain tetap dipertahankan. Jam yang sudah diisi dipertahankan saat memilih tanggal lain. Tanpa JavaScript, tautan GET membuka form dengan tanggal/perusahaan terpilih; input yang belum disimpan tidak dibawa saat berpindah halaman. Tanggal diinterpretasikan di zona perusahaan yang dipilih pada form.
 - Buka detail konten berstatus **Ide/Brief**, pilih **Hapus konten**, centang konfirmasi, lalu **Ya, hapus konten**. Server memeriksa ulang status dalam transaksi; status lain tidak dapat dihapus. Penghapusan memakai POST+CSRF, menyimpan `deleted_at`/`deleted_by` dan audit, serta menyembunyikan konten dari kalender, hitungan tanpa tanggal, dan semua panel dashboard. Unique key ide peringatan dipertahankan agar generator tidak membuat ulang ide yang dihapus. Tidak tersedia pemulihan dari UI.
 - Migrasi `003_calendar_ideas.sql` menambahkan 8 tanggal peringatan tetap: Pendidikan Nasional, Kemerdekaan RI, Batik Nasional, Sumpah Pemuda, Perempuan Internasional, Lingkungan Hidup Sedunia, Keterampilan Pemuda Sedunia, dan Perdamaian Internasional. Katalog terkurasi ini bukan daftar lengkap hari libur; setiap peringatan memiliki sumber (Wikipedia untuk nasional, PBB untuk internasional) dan tanggal pemeriksaan. Hari raya bertanggal berubah dan tema tahunan belum tersedia. Peringatan tetap terlihat meski filter status konten berubah.
@@ -61,6 +61,39 @@ Pada instalasi lama, backup SQLite secara konsisten lalu jalankan `php bin/conso
 Menu `index.php?page=admin&section=content` menyediakan pencarian judul/brief, filter perusahaan/status/kampanye, daftar 20 item per halaman, detail, tambah Ide/Brief, dan penghapusan dengan konfirmasi. Seluruh status terlihat, termasuk konten tanpa tanggal; status tahap lanjut hanya dibaca, bukan editor draft AI atau alur review.
 
 Edit hanya berlaku pada Ide/Brief di perusahaan aktif: judul, brief, format, status Ide/Brief, dan tanggal rencana lokal perusahaan. Pemilik, perusahaan, kaitan kampanye, jadwal publikasi, serta identitas ide otomatis tidak berubah. Kampanye yang sudah diarsipkan tetap dapat memiliki konten yang diedit; tidak menerima kaitan baru. Ide/Brief tanpa kampanye dapat dikaitkan melalui detail kampanye. Form versi lama ditolak jika konten telah diedit, dikaitkan, dihapus, atau diubah statusnya. Kalender dan halaman ini menggunakan form/validasi tambah yang sama. Penghapusan tetap soft-delete dan ide peringatan terhapus tidak dibuat ulang oleh scheduler. Tidak ada publikasi atau AI otomatis.
+
+### Studio AI (Gemini, tahap teks)
+
+Menu `index.php?page=admin&section=ai` menyimpan brief lokal untuk Blog, Konten umum, Instagram, YouTube, TikTok, dan Facebook. Pilih perusahaan/kampanye, topik, brief, audiens, gaya, fakta publik, platform, serta jenis hasil yang direncanakan. Brief immutable; revisi/regenerasi hasil sukses dilakukan dengan brief baru. Daftar menampilkan maksimal 50 brief terbaru sesuai perusahaan; detail yang lebih lama tetap tersedia lewat ID.
+
+Generasi menghasilkan artikel Markdown, caption/deskripsi, judul SEO, hook, skrip/storyboard, CTA, hashtag, alt text, brief gambar/video, naskah audio, dan pemeriksaan wajib per platform. **Tidak menghasilkan file gambar, video, atau audio; tidak menerima upload/analisis media dan tidak mempublikasikan posting.** Hasil masih perlu kurasi fakta, lisensi/disclosure, serta aset final. Hasil tampil sebagai teks ter-escape yang bisa disalin dari textarea atau diunduh sebagai `.txt`.
+
+Pada instalasi lama, backup konsisten lalu jalankan `php bin/console.php migrate` untuk `007_ai_studio.sql`. Tambahkan blok ini ke array konfigurasi privat `config/local.php` (jangan mengganti konfigurasi autentikasi/mail atau app key):
+
+```php
+'ai' => [
+    'provider' => 'gemini',
+    'api_key' => getenv('GEMINI_API_KEY') ?: '',
+    'model' => getenv('GEMINI_MODEL') ?: 'gemini-3.8-flash',
+    'timeout_seconds' => 60,
+],
+```
+
+Model contoh mengikuti [dokumentasi Gemini](https://ai.google.dev/gemini-api/docs/generate-content/structured-output); gunakan model teks dengan structured output yang tersedia bagi akun Anda. Endpoint HTTPS dikunci ke Google Gemini, tidak menerima endpoint dari form; API key dikirim lewat header server dan tidak masuk prompt/UI/log. API memakai `generateContent` + JSON schema, output lengkap `STOP`, validasi bidang/platform/ukuran, dan tidak memakai model pengganti atau hasil simulasi bila gagal. Dokumentasi dan REST discovery diverifikasi 12 Oktober 2026. Pengujian otomatis memakai fixture lokal, bukan API berbayar.
+
+Konfigurasi harus tersedia di **web dan CLI**. Bila memakai environment variables, pastikan Herd/PHP-FPM dan worker memiliki variabel tersebut; `config/example.php` saja tidak mengubah konfigurasi lokal lama. Jangan menempelkan key ke chat, source publik, shell history, atau command argument. Halaman tanpa konfigurasi tetap menyimpan brief tetapi tombol generate dinonaktifkan; “terkonfigurasi” bukan bukti key/model/kuota sudah diverifikasi.
+
+Alur: simpan brief → buka detail → setujui pengiriman nama perusahaan/brief/audiens/gaya/fakta/platform ke Google dan kemungkinan biaya → **Generate draft teks** → proses antrean:
+
+```sh
+php bin/console.php ai:work
+```
+
+Worker memproses satu brief per eksekusi, tanpa menahan transaksi database selama jaringan. Untuk hosting, cron terpisah dengan path absolut dapat memanggil per menit. **Tidak ada scheduler AI yang otomatis dipasang**, dan scheduler peringatan yang sudah ada tidak memproses AI. Jika worker tidak berjalan, status tetap Menunggu worker; tombol muat ulang tidak memulai generasi.
+
+Klaim antrean memakai transaksi/lease 180 detik sehingga worker paralel tidak menggandakan permintaan. Kegagalan/timeout tercatat dengan kode aman dan alasan di UI; job melewati lease menjadi gagal saat worker berikutnya berjalan. Tidak ada retry otomatis: timeout mungkin tetap dikenai biaya oleh provider, periksa akun sebelum retry manual (maksimal tiga percobaan per brief). Worker memeriksa ulang admin/perusahaan/kampanye sebelum permintaan; tidak mengirim kredensial atau data pengguna internal ke prompt.
+
+**Simpan ke Ide & Draft** membutuhkan konfirmasi dan menyimpan satu item `ai_draft` dengan varian per platform, model/prompt metadata dan tautan kembali ke Studio. Simpan ulang tidak menggandakan item/varian; tidak memberi tanggal rencana, persetujuan, jadwal, atau status Terbit. Kampanye wajib nonarsip pada kaitan baru; arsip setelah generasi tidak membolehkan kaitan baru. Audio disimpan sebagai format Teks karena yang tersedia baru naskah, bukan berkas audio. Pengeditan hasil, template, approval, dan file media final merupakan tahap berikutnya.
 
 Alternatif CLI:
 

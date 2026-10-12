@@ -9,6 +9,8 @@ require_once __DIR__ . '/Dashboard.php';
 require_once __DIR__ . '/ContentCalendar.php';
 require_once __DIR__ . '/ContentEditor.php';
 require_once __DIR__ . '/ContentLibrary.php';
+require_once __DIR__ . '/Gemini.php';
+require_once __DIR__ . '/AiStudio.php';
 require_once __DIR__ . '/ObservanceAutomation.php';
 require_once __DIR__ . '/Campaigns.php';
 
