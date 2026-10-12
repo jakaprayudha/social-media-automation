@@ -15,39 +15,7 @@ $automationEnabled = $calendar['automation'] !== null && (int) $calendar['automa
 $formAction = $calendarUrl . '&month=' . $calendar['month'];
 ?>
 <div class="page-heading"><span>PERENCANAAN KONTEN</span><h1>Kalender konten</h1><p>Pantau tanggal konten dan status editorial dalam satu kalender.</p></div>
-<details class="content-create dashboard-panel" id="content-create" <?= $contentFormOpen ? 'open' : '' ?>>
-    <summary>+ Tambah konten</summary>
-    <form class="content-create-form" method="post" action="<?= escape($formAction) ?>">
-        <input type="hidden" name="csrf" value="<?= escape($csrf) ?>">
-        <input type="hidden" name="action" value="create_content">
-        <input type="hidden" name="creation_key" value="<?= escape($contentForm['creation_key']) ?>">
-        <p>Buat ide atau brief. Klik tanggal atau + di kalender untuk mengisi tanggal rencana. Pemilik adalah akun Anda; tanggal rencana tidak memicu publikasi.</p>
-        <div class="content-form-grid">
-            <div><label for="content-company">Perusahaan</label><select id="content-company" name="company_id" required>
-                <option value="">Pilih perusahaan aktif</option>
-                <?php foreach ($calendar['companies'] as $company): if ($company['status'] !== 'active') { continue; } ?>
-                    <option value="<?= (int) $company['id'] ?>" <?= (string) $company['id'] === ($contentForm['company_id'] !== '' ? $contentForm['company_id'] : (string) ($selectedCompany['id'] ?? '')) ? 'selected' : '' ?>><?= escape($company['name']) ?> (<?= escape($company['timezone']) ?>)</option>
-                <?php endforeach ?>
-            </select></div>
-            <div><label for="content-campaign">Kampanye (opsional)</label><select id="content-campaign" name="campaign_id">
-                <option value="">Tanpa kampanye</option>
-                <?php foreach ($calendar['campaigns'] as $campaign): if ($campaign['status'] === 'archived') { continue; } ?>
-                    <option value="<?= (int) $campaign['id'] ?>" data-company-id="<?= (int) $campaign['company_id'] ?>" <?= (string) $campaign['id'] === $contentForm['campaign_id'] ? 'selected' : '' ?>><?= escape($campaign['name'] . ' — ' . $campaign['company_name']) ?></option>
-                <?php endforeach ?>
-            </select><small>Harus berasal dari perusahaan yang sama; kampanye arsip tidak menerima konten baru.</small></div>
-            <div><label for="content-title">Judul konten</label><input id="content-title" name="title" maxlength="200" value="<?= escape($contentForm['title']) ?>" required></div>
-            <div><label for="content-status">Status awal</label><select id="content-status" name="status">
-                <?php foreach (ContentEditor::INITIAL_STATUSES as $value => $label): ?><option value="<?= escape($value) ?>" <?= $contentForm['status'] === $value ? 'selected' : '' ?>><?= escape($label) ?></option><?php endforeach ?>
-            </select></div>
-            <div><label for="content-format">Format</label><select id="content-format" name="format">
-                <?php foreach (ContentEditor::FORMATS as $value => $label): ?><option value="<?= escape($value) ?>" <?= $contentForm['format'] === $value ? 'selected' : '' ?>><?= escape($label) ?></option><?php endforeach ?>
-            </select></div>
-            <div><label for="content-planned-at">Tanggal &amp; waktu rencana (opsional)</label><input id="content-planned-at" type="datetime-local" name="planned_at" min="2000-01-01T00:00" max="2099-12-31T23:59" value="<?= escape($contentForm['planned_at']) ?>" aria-describedby="plan-time-help"><small id="plan-time-help">Menggunakan zona waktu perusahaan yang dipilih, bukan zona browser.</small></div>
-            <div><label for="content-brief">Brief (opsional)</label><textarea id="content-brief" name="brief" rows="4" maxlength="5000"><?= escape($contentForm['brief']) ?></textarea></div>
-        </div>
-        <button class="calendar-primary" type="submit">Simpan konten</button>
-    </form>
-</details>
+<?php $contentCatalog = $calendar; require __DIR__ . '/content-form.php'; ?>
 <section class="dashboard-panel observance-automation" aria-labelledby="automation-title">
     <div class="panel-heading"><div><h2 id="automation-title">Ide otomatis dari hari peringatan</h2><p><?= $calendar['catalog_count'] ?> peringatan terkurasi nasional/internasional, tanggal tetap. Bukan daftar lengkap hari libur; hari raya bertanggal berubah belum tersedia.</p></div><span class="count-chip"><?= $automationEnabled ? 'Aktif' : 'Belum aktif / dijeda' ?></span></div>
     <div class="automation-body">
@@ -135,6 +103,7 @@ $formAction = $calendarUrl . '&month=' . $calendar['month'];
                                     <dt>Waktu perusahaan</dt><dd><?= escape(dashboardTime((int) $content['calendar_at'], $content['company_timezone'])) ?><br><?= escape($content['company_timezone']) ?></dd>
                                     <dt>Brief</dt><dd><?= $content['brief'] === '' ? 'Belum ditambahkan' : escape($content['brief']) ?></dd>
                                 </dl>
+                                <a class="campaign-detail-link" href="<?= escape($app->url('admin') . '&section=content&id=' . (int) $content['id']) ?>">Detail / edit konten</a>
                                 <?php if (isset(ContentEditor::INITIAL_STATUSES[$content['status']])): ?>
                                     <details class="calendar-delete">
                                         <summary>Hapus konten</summary>

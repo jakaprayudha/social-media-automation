@@ -833,6 +833,152 @@ try {
     $app->migrate();
     check(count($campaignService->snapshot(null, 'all')['items']) === 2,
         'Campaign migration preserves data and does not insert demo campaigns');
+    $library = new ContentLibrary($app);
+    $libraryUrl = $adminUrl . '&section=content';
+    $libraryPage = request($libraryUrl, $jar);
+    check($libraryPage['status'] === 200 && str_contains($libraryPage['body'], 'Cari judul / brief')
+        && str_contains($libraryPage['body'], 'id="content-create"'), 'Content library renders filters and shared creation form');
+    check(request($libraryUrl, $directory . '/library-guest.txt')['status'] === 303, 'Guests cannot access content library');
+    foreach (['company[]=1', 'company=999999', 'campaign[]=1', 'campaign=999999',
+        'status[]=idea', 'status=unknown', 'q[]=test', 'q=' . str_repeat('x', 201),
+        'p=0', 'p=999999', 'id[]=1', 'id=999999', 'edit=1'] as $badFilter) {
+        check(request($libraryUrl . '&' . $badFilter, $jar)['status'] === 400, 'Reject library filter ' . substr($badFilter, 0, 30));
+    }
+    check($library->snapshot(null, 'all', null, 'impossible-library-query')['total'] === 0
+        && str_contains(request($libraryUrl . '&q=impossible-library-query', $jar)['body'], 'Belum ada konten sesuai filter'),
+        'Content search has honest empty state');
+    $libraryInput = array_replace($contentInput, [
+        'title' => '<script>Library 100%_literal</script>', 'brief' => 'Searchable unique-library-brief',
+        'planned_at' => '', 'creation_key' => bin2hex(random_bytes(32)),
+    ]);
+    $libraryId = $editor->create($libraryInput, $userId);
+    check($library->snapshot(null, 'all', null, '100%_literal')['total'] === 1
+        && $library->snapshot(null, 'all', null, 'unique-library-brief')['total'] === 1,
+        'Library searches brief and treats LIKE wildcards literally');
+    check($library->snapshot($companyIds[1], 'all', null, 'unique-library-brief')['total'] === 0
+        && $library->snapshot(null, 'published', null, 'unique-library-brief')['total'] === 0
+        && $library->snapshot($companyIds[0], 'idea', null, 'unique-library-brief')['total'] === 1,
+        'Library filters combine company status and search');
+    check($library->snapshot(null, 'all', $campaignId, '')['total'] === 1,
+        'Library campaign filter excludes deleted linked content');
+    $libraryDetail = request($libraryUrl . '&id=' . $libraryId . '&edit=1', $jar);
+    check($libraryDetail['status'] === 200 && str_contains($libraryDetail['body'], 'value="update_content"')
+        && str_contains($libraryDetail['body'], '&lt;script&gt;Library')
+        && !str_contains($libraryDetail['body'], '<script>Library'),
+        'Content detail and prefilled edit form escape stored data');
+    $libraryUpdate = array_replace($libraryInput, [
+        'action' => 'update_content', 'content_id' => (string) $libraryId, 'version' => '1',
+        'status' => 'brief', 'planned_at' => '2026-10-28T09:30', 'csrf' => csrfFrom($libraryDetail['body']),
+    ]);
+    check(request($libraryUrl . '&id=' . $libraryId, $jar, array_replace($libraryUpdate, ['csrf' => 'bad']))['status'] === 419,
+        'Library edit requires CSRF');
+    check(request($libraryUrl . '&id=' . $libraryId, $jar, array_replace($libraryUpdate, ['title' => '']))['status'] === 422,
+        'Library edit validates title without mutating content');
+    check(request($libraryUrl . '&id=' . $libraryId, $jar, $libraryUpdate)['status'] === 303,
+        'Library edit persists validated brief and local planning time');
+    $savedLibrary = $library->snapshot(null, 'all', null, '', 1, $libraryId)['detail'];
+    check((int) $savedLibrary['version'] === 2 && $savedLibrary['status'] === 'brief'
+        && (int) $savedLibrary['owner_id'] === $userId && $savedLibrary['scheduled_at'] === null
+        && (int) $savedLibrary['planned_at'] === (new DateTimeImmutable('2026-10-28T02:30:00Z'))->getTimestamp(),
+        'Edit increments version preserves ownership and does not schedule publishing');
+    $editedDay = $calendarService->snapshot($companyIds[0], '2026-10', 'all')['days']['2026-10-28'];
+    $editedCalendarItems = array_values(array_filter($editedDay, fn (array $item): bool => (int) $item['id'] === $libraryId));
+    check(count($editedCalendarItems) === 1 && $editedCalendarItems[0]['status'] === 'brief'
+        && $editedCalendarItems[0]['brief'] === $savedLibrary['brief'],
+        'Library edits immediately appear with exact date status and brief in calendar');
+    $staleResponse = request($libraryUrl . '&id=' . $libraryId, $jar, $libraryUpdate);
+    check($staleResponse['status'] === 422 && str_contains($staleResponse['body'], 'name="version" value="1"'),
+        'Stale edit is rejected and submitted version is not silently refreshed');
+    foreach ([
+        ['version' => 'bad'], ['status' => 'published'], ['company_id' => (string) $companyIds[1]],
+        ['campaign_id' => (string) $httpCampaignId], ['planned_at' => '2026-02-30T10:00'],
+        ['brief' => str_repeat('x', 5001)], ['format' => 'unknown'],
+    ] as $invalidEdit) {
+        check(request($libraryUrl . '&id=' . $libraryId, $jar,
+            array_replace($libraryUpdate, ['version' => '2'], $invalidEdit))['status'] === 422,
+            'Reject invalid library edit ' . array_key_first($invalidEdit));
+    }
+    $app->db()->prepare("UPDATE companies SET status = 'inactive' WHERE id = ?")->execute([$companyIds[0]]);
+    check(request($libraryUrl . '&id=' . $libraryId . '&edit=1', $jar)['status'] === 400
+        && request($libraryUrl . '&id=' . $libraryId, $jar, array_replace($libraryUpdate, ['version' => '2']))['status'] === 422,
+        'Inactive companies reject library edits');
+    $app->db()->prepare("UPDATE companies SET status = 'active' WHERE id = ?")->execute([$companyIds[0]]);
+    check(request($libraryUrl . '&id=' . $publishedId . '&edit=1', $jar)['status'] === 400
+        && !str_contains(request($libraryUrl . '&id=' . $publishedId, $jar)['body'], 'value="delete_content"'),
+        'Advanced content is read-only without edit or delete actions');
+    $campaignService->assign($httpCampaignId, $libraryId, $userId);
+    check((int) $library->snapshot(null, 'all', null, '', 1, $libraryId)['detail']['version'] === 3,
+        'Campaign assignment invalidates stale content forms');
+    $app->db()->prepare("UPDATE content_items SET status = 'pending_review' WHERE id = ?")->execute([$libraryId]);
+    check(request($libraryUrl . '&id=' . $libraryId, $jar, array_replace($libraryUpdate, ['version' => '4',
+        'campaign_id' => (string) $httpCampaignId]))['status'] === 422,
+        'Server rejects forged edits of advanced content');
+    $app->db()->prepare("UPDATE content_items SET status = 'brief' WHERE id = ?")->execute([$libraryId]);
+    $deleteLibrary = ['action' => 'delete_content', 'content_id' => (string) $libraryId, 'csrf' => $libraryUpdate['csrf']];
+    check(request($libraryUrl . '&id=' . $libraryId, $jar, $deleteLibrary)['status'] === 422,
+        'Library deletion requires explicit confirmation');
+    check(request($libraryUrl . '&id=' . $libraryId, $jar, array_replace($deleteLibrary, ['confirm_delete' => '1']))['status'] === 303
+        && $library->snapshot(null, 'all', null, 'unique-library-brief')['total'] === 0
+        && request($libraryUrl . '&id=' . $libraryId, $jar)['status'] === 400,
+        'Library deletion hides content and rejects deleted detail');
+    $creationPage = request($libraryUrl, $jar);
+    preg_match('/name="creation_key" value="([a-f0-9]{64})"/', $creationPage['body'], $libraryKey);
+    $createLibrary = array_replace($libraryInput, ['action' => 'create_content', 'creation_key' => $libraryKey[1],
+        'csrf' => csrfFrom($creationPage['body']), 'title' => 'Library HTTP creation']);
+    check(request($libraryUrl, $jar, $createLibrary)['status'] === 303
+        && request($libraryUrl, $jar, $createLibrary)['status'] === 422,
+        'Library HTTP creation persists once and rejects used form token');
+    for ($i = 0; $i < 21; $i++) {
+        $editor->create(array_replace($libraryInput, ['title' => 'Library pagination ' . $i,
+            'creation_key' => bin2hex(random_bytes(32))]), $userId);
+    }
+    $firstLibrary = $library->snapshot(null, 'all', null, 'Library pagination');
+    $secondLibrary = $library->snapshot(null, 'all', null, 'Library pagination', 2);
+    check($firstLibrary['total'] === 21 && count($firstLibrary['items']) === 20
+        && count($secondLibrary['items']) === 1 && $firstLibrary['pages'] === 2
+        && array_intersect(array_column($firstLibrary['items'], 'id'), array_column($secondLibrary['items'], 'id')) === [],
+        'Library paginates exactly twenty items with no overlap');
+    check(str_contains(request($libraryUrl . '&q=Library+pagination', $jar)['body'], '&amp;p=2')
+        && request($libraryUrl . '&q=Library+pagination&p=3', $jar)['status'] === 400,
+        'Pagination preserves search and rejects unavailable pages');
+    $archivedContent = $library->snapshot(null, 'all', null, '', 1, $manualId)['detail'];
+    $archivedEdit = array_replace($contentInput, ['campaign_id' => (string) $campaignId,
+        'title' => 'Edited inside archived campaign', 'planned_at' => '']);
+    $editor->update($archivedEdit, $userId, $manualId, (int) $archivedContent['version']);
+    $afterArchivedEdit = $library->snapshot(null, 'all', null, '', 1, $manualId)['detail'];
+    check($afterArchivedEdit['planned_at'] === null && (int) $afterArchivedEdit['campaign_id'] === $campaignId
+        && $afterArchivedEdit['title'] === 'Edited inside archived campaign',
+        'Editing an existing archived campaign association preserves it and can clear planning time');
+    check($campaignService->snapshot(null, 'all', $campaignId)['content'][0]['title'] === $afterArchivedEdit['title'],
+        'Campaign detail immediately reflects edited content');
+    $app->db()->prepare('UPDATE users SET is_active = 0 WHERE id = ?')->execute([$userId]);
+    try {
+        $editor->update($archivedEdit, $userId, $manualId, (int) $afterArchivedEdit['version']);
+        check(false, 'Inactive actor cannot edit library content');
+    } catch (InvalidArgumentException) {
+        check(true, 'Inactive actor cannot edit library content');
+    }
+    $app->db()->prepare('UPDATE users SET is_active = 1 WHERE id = ?')->execute([$userId]);
+    $automaticContent = $app->db()->query("SELECT * FROM content_items WHERE observance_id IS NOT NULL
+        AND deleted_at IS NULL AND status = 'idea' ORDER BY id LIMIT 1")->fetch();
+    $automaticEdit = array_replace($contentInput, ['company_id' => (string) $automaticContent['company_id'],
+        'title' => 'Curated observance brief', 'status' => 'brief', 'planned_at' => '2026-10-28T11:00']);
+    $editor->update($automaticEdit, $userId, (int) $automaticContent['id'], (int) $automaticContent['version']);
+    $afterAutomaticEdit = $library->snapshot(null, 'all', null, '', 1, (int) $automaticContent['id'])['detail'];
+    check($afterAutomaticEdit['observance_id'] === $automaticContent['observance_id']
+        && $afterAutomaticEdit['observance_year'] === $automaticContent['observance_year']
+        && $afterAutomaticEdit['owner_id'] === $automaticContent['owner_id'],
+        'Editing automatic ideas preserves observance identity and owner');
+    $beforeGenerator = $afterAutomaticEdit['version'];
+    $automation->generate((int) $automaticContent['observance_year']);
+    check($library->snapshot(null, 'all', null, '', 1, (int) $automaticContent['id'])['detail']['version'] === $beforeGenerator,
+        'Observance generator does not overwrite human edits');
+    check(request($libraryUrl . '&id=' . $publishedId, $jar,
+        array_replace($deleteLibrary, ['content_id' => (string) $publishedId, 'confirm_delete' => '1']))['status'] === 422,
+        'Library rejects forged deletion of published content');
+    check(request($libraryUrl . '&company=' . $companyIds[1] . '&id=' . $manualId, $jar)['status'] === 400
+        && request($libraryUrl . '&company=' . $companyIds[1] . '&campaign=' . $campaignId, $jar)['status'] === 400,
+        'Library rejects cross-company detail and campaign scope');
     foreach ($sections as $key => $item) {
         $menuPage = request($adminUrl . '&section=' . $key, $jar);
         if ($item['later'] ?? false) {

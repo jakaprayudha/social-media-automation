@@ -190,6 +190,12 @@ main { padding: 39px 36px; outline: none; }
 .campaign-link-form { margin: 20px 0; }
 .campaign-link-form label { display: block; font-size: 11px; color: #766783; margin-bottom: 8px; }
 .campaign-link-form select { font: inherit; padding: 10px; max-width: 100%; border: 1px solid #e4dfeb; border-radius: 7px; margin: 0 7px 10px 0; }
+.content-filters { flex-wrap: wrap; }
+.content-filters .calendar-filter-field { min-width: 0; flex: 1 1 150px; }
+.content-filters input { width: 100%; min-width: 0; }
+.content-pagination { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 18px 24px; font-size: 11px; color: #766783; }
+.content-delete-form { margin-top: 24px; border-top: 1px solid #e4dfeb; padding-top: 16px; font-size: 12px; color: #a74051; }
+.content-delete-form label { flex-basis: 100%; }
 @media (max-width: 1250px) {
     .metric-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     .dashboard-heading { flex-direction: column; }

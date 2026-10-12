@@ -16,6 +16,18 @@ final class ContentEditor
     /** @param array<string, string> $input */
     public function create(array $input, int $ownerId): int
     {
+        return $this->save($input, $ownerId);
+    }
+
+    /** @param array<string, string> $input */
+    public function update(array $input, int $actorId, int $id, int $version): int
+    {
+        return $this->save($input, $actorId, $id, $version);
+    }
+
+    /** @param array<string, string> $input */
+    private function save(array $input, int $ownerId, ?int $id = null, ?int $version = null): int
+    {
         $title = trim($input['title']);
         $brief = trim($input['brief']);
         if ($title === '' || mb_strlen($title) > 200 || mb_strlen($brief) > 5000
@@ -24,14 +36,30 @@ final class ContentEditor
         }
         if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $input['company_id'])
             || !isset(self::FORMATS[$input['format']]) || !isset(self::INITIAL_STATUSES[$input['status']])
-            || !preg_match('/\A[a-f0-9]{64}\z/', $input['creation_key'])) {
+            || ($id === null && !preg_match('/\A[a-f0-9]{64}\z/', $input['creation_key']))) {
             throw new InvalidArgumentException('Perusahaan, format, status awal, atau token form tidak valid.');
         }
-        return $this->app->transaction(function (PDO $db) use ($input, $ownerId, $title, $brief): int {
+        return $this->app->transaction(function (PDO $db) use ($input, $ownerId, $title, $brief, $id, $version): int {
             $owner = $db->prepare("SELECT 1 FROM users WHERE id = ? AND is_active = 1 AND role = 'system_admin'");
             $owner->execute([$ownerId]);
             if (!$owner->fetchColumn()) {
                 throw new InvalidArgumentException('Pemilik harus administrator aktif.');
+            }
+            $current = null;
+            if ($id !== null) {
+                $query = $db->prepare('SELECT * FROM content_items WHERE id = ? AND deleted_at IS NULL');
+                $query->execute([$id]);
+                $current = $query->fetch();
+                if (!$current || !isset(self::INITIAL_STATUSES[$current['status']])) {
+                    throw new InvalidArgumentException('Hanya konten Ide atau Brief yang tersedia dapat diedit.');
+                }
+                if ((int) $current['version'] !== $version) {
+                    throw new InvalidArgumentException('Konten telah berubah. Muat ulang detail sebelum mengedit kembali.');
+                }
+                if ((int) $current['company_id'] !== (int) $input['company_id']
+                    || (string) ($current['campaign_id'] ?? '') !== ($input['campaign_id'] ?? '')) {
+                    throw new InvalidArgumentException('Perusahaan dan kaitan kampanye tidak dapat diganti melalui edit konten.');
+                }
             }
             $company = $db->prepare("SELECT timezone FROM companies WHERE id = ? AND status = 'active'");
             $company->execute([(int) $input['company_id']]);
@@ -40,7 +68,7 @@ final class ContentEditor
                 throw new InvalidArgumentException('Pilih perusahaan yang terdaftar dan aktif.');
             }
             $campaignId = $input['campaign_id'] ?? '';
-            if ($campaignId !== '') {
+            if ($campaignId !== '' && $current === null) {
                 if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $campaignId)) {
                     throw new InvalidArgumentException('Kampanye tidak valid.');
                 }
@@ -60,6 +88,13 @@ final class ContentEditor
                     throw new InvalidArgumentException('Tanggal atau waktu rencana tidak tersedia di zona waktu perusahaan.');
                 }
                 $plannedAt = $date->getTimestamp();
+            }
+            if ($id !== null) {
+                $db->prepare('UPDATE content_items SET title = ?, brief = ?, format = ?, status = ?,
+                    planned_at = ?, updated_at = ?, version = version + 1 WHERE id = ?')
+                    ->execute([$title, $brief, $input['format'], $input['status'], $plannedAt, time(), $id]);
+                $this->app->audit('content.updated', $ownerId);
+                return $id;
             }
             $existing = $db->prepare('SELECT id, owner_id, deleted_at FROM content_items WHERE creation_key = ?');
             $existing->execute([$input['creation_key']]);

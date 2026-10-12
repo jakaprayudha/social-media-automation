@@ -91,6 +91,7 @@ try {
             exit;
         }
         $adminActions = [
+            'content' => ['create_content', 'update_content', 'delete_content'],
             'calendar' => ['create_content', 'delete_content', 'automation_enable', 'automation_disable', 'generate_ideas'],
             'campaigns' => ['create_campaign', 'update_campaign', 'archive_campaign', 'assign_content'],
         ];
@@ -101,13 +102,63 @@ try {
             echo 'Tindakan pada menu admin tidak tersedia.';
             exit;
         }
-        if ($section === 'calendar') {
+        if (in_array($section, ['calendar', 'content'], true)) {
             $_SESSION['content_creation_key'] ??= bin2hex(random_bytes(32));
             $contentForm = [
                 'title' => '', 'brief' => '', 'company_id' => '', 'format' => 'unspecified',
                 'status' => 'idea', 'planned_at' => '', 'creation_key' => $_SESSION['content_creation_key'], 'campaign_id' => '',
             ];
             $contentFormOpen = false;
+        }
+        if ($section === 'content') {
+            $contentEdit = false;
+            $companyInput = $_GET['company'] ?? 'all';
+            $campaignInput = $_GET['campaign'] ?? 'all';
+            $statusInput = $_GET['status'] ?? 'all';
+            $searchInput = $_GET['q'] ?? '';
+            $listPageInput = $_GET['p'] ?? '1';
+            $detailInput = $_GET['id'] ?? null;
+            try {
+                foreach ([$companyInput, $campaignInput] as $filter) {
+                    if (!is_string($filter) || ($filter !== 'all' && !preg_match('/\A[1-9][0-9]{0,8}\z/', $filter))) {
+                        throw new InvalidArgumentException('Filter perusahaan atau kampanye tidak valid.');
+                    }
+                }
+                if (!is_string($statusInput) || !is_string($searchInput)
+                    || !is_string($listPageInput) || !preg_match('/\A[1-9][0-9]{0,5}\z/', $listPageInput)
+                    || ($detailInput !== null && (!is_string($detailInput) || !preg_match('/\A[1-9][0-9]{0,8}\z/', $detailInput)))) {
+                    throw new InvalidArgumentException('Filter atau ID konten tidak valid.');
+                }
+                $contentData = (new ContentLibrary($app))->snapshot(
+                    $companyInput === 'all' ? null : (int) $companyInput, $statusInput,
+                    $campaignInput === 'all' ? null : (int) $campaignInput, trim($searchInput),
+                    (int) $listPageInput, $detailInput === null ? null : (int) $detailInput,
+                );
+                $contentVersion = $contentData['detail']['version'] ?? null;
+                if ($method === 'GET' && isset($_GET['edit'])) {
+                    $detail = $contentData['detail'];
+                    if ($_GET['edit'] !== '1' || $detail === null
+                        || !isset(ContentEditor::INITIAL_STATUSES[$detail['status']]) || $detail['company_status'] !== 'active') {
+                        throw new InvalidArgumentException('Konten ini tidak dapat diedit.');
+                    }
+                    foreach (['title', 'brief', 'company_id', 'format', 'status', 'campaign_id'] as $field) {
+                        $contentForm[$field] = (string) ($detail[$field] ?? '');
+                    }
+                    $contentForm['planned_at'] = $detail['planned_at'] === null ? ''
+                        : (new DateTimeImmutable('@' . $detail['planned_at']))
+                            ->setTimezone(new DateTimeZone($detail['company_timezone']))->format('Y-m-d\TH:i');
+                    $contentEdit = true;
+                    $contentFormOpen = true;
+                } elseif ($method === 'GET' && $contentData['selected_campaign'] !== null
+                    && $contentData['selected_campaign']['status'] !== 'archived') {
+                    $contentForm['company_id'] = (string) $contentData['selected_campaign']['company_id'];
+                    $contentForm['campaign_id'] = (string) $contentData['selected_campaign']['id'];
+                }
+            } catch (InvalidArgumentException $validationError) {
+                http_response_code(400);
+                echo escape($validationError->getMessage());
+                exit;
+            }
         }
         if ($section === 'campaigns') {
             $_SESSION['campaign_creation_key'] ??= bin2hex(random_bytes(32));
@@ -231,6 +282,54 @@ try {
             $auth->clearSession();
             $_SESSION['notice'] = 'Anda telah keluar dari akun.';
             redirectTo($app->url());
+        } elseif ($page === 'admin' && $section === 'content') {
+            try {
+                $action = formField('action');
+                $editor = new ContentEditor($app);
+                $targetId = null;
+                if ($action !== 'create_content') {
+                    $idInput = formField('content_id');
+                    if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $idInput)
+                        || $contentData['detail'] === null || (int) $contentData['detail']['id'] !== (int) $idInput) {
+                        throw new InvalidArgumentException('Konten pada form tidak sesuai dengan halaman detail.');
+                    }
+                    $targetId = (int) $idInput;
+                }
+                if ($action === 'delete_content') {
+                    if (formField('confirm_delete') !== '1') {
+                        throw new InvalidArgumentException('Konfirmasi penghapusan konten terlebih dahulu.');
+                    }
+                    $editor->delete($targetId, (int) $user['id']);
+                    $_SESSION['notice'] = 'Konten dihapus dari daftar, kalender, dan kampanye. Ide otomatis yang dihapus tidak dibuat ulang.';
+                    redirectTo($app->url('admin') . '&' . http_build_query([
+                        'section' => 'content', 'company' => $companyInput, 'campaign' => $campaignInput,
+                        'status' => $statusInput, 'q' => $searchInput,
+                    ]));
+                }
+                $contentEdit = $action === 'update_content';
+                $contentFormOpen = true;
+                foreach (array_keys($contentForm) as $field) {
+                    $contentForm[$field] = formField($field);
+                }
+                if ($contentEdit) {
+                    $contentVersion = formField('version');
+                    if (!preg_match('/\A[1-9][0-9]{0,8}\z/', $contentVersion)) {
+                        throw new InvalidArgumentException('Versi konten tidak valid.');
+                    }
+                    $id = $editor->update($contentForm, (int) $user['id'], $targetId, (int) $contentVersion);
+                } else {
+                    if (!hash_equals($_SESSION['content_creation_key'], $contentForm['creation_key'])) {
+                        throw new InvalidArgumentException('Form konten sudah digunakan atau kedaluwarsa. Muat ulang halaman.');
+                    }
+                    $id = $editor->create($contentForm, (int) $user['id']);
+                    $_SESSION['content_creation_key'] = bin2hex(random_bytes(32));
+                }
+                $_SESSION['notice'] = 'Konten disimpan. Tanggal rencana tidak memicu publikasi.';
+                redirectTo($app->url('admin') . '&section=content&id=' . $id);
+            } catch (InvalidArgumentException $validationError) {
+                http_response_code(422);
+                $error = $validationError->getMessage();
+            }
         } elseif ($page === 'admin' && $section === 'campaigns') {
             $action = formField('action');
             $campaignService = new Campaigns($app);

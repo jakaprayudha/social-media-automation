@@ -92,7 +92,7 @@ $campaignFormAction = $campaignEdit && $detail !== null ? $campaignBase . '&id='
         <?php if ($canManage): ?><a class="calendar-primary" href="<?= escape($calendarLink . '&date=' . $detail['start_date'] . '#content-create') ?>">+ Tambah konten kampanye</a><?php endif ?>
         <h3 class="campaign-content-heading">Konten terkait (<?= count($campaignData['content']) ?>)</h3>
         <?php if ($campaignData['content'] === []): ?><p>Belum ada konten terkait. Kaitkan Ide/Brief yang sudah ada atau buat konten dari kalender.</p><?php else: ?>
-            <ul class="campaign-content-list"><?php foreach ($campaignData['content'] as $content): ?><li><strong><?= escape($content['title']) ?></strong> <span class="status-pill"><?= escape(Dashboard::STATUSES[$content['status']]) ?></span><small><?= $content['calendar_at'] === null ? 'Belum memiliki tanggal' : escape(dashboardTime((int) $content['calendar_at'], $detail['timezone'])) ?></small></li><?php endforeach ?></ul>
+            <ul class="campaign-content-list"><?php foreach ($campaignData['content'] as $content): ?><li><a class="campaign-detail-link" href="<?= escape($app->url('admin') . '&section=content&id=' . (int) $content['id']) ?>"><strong><?= escape($content['title']) ?></strong></a> <span class="status-pill"><?= escape(Dashboard::STATUSES[$content['status']]) ?></span><small><?= $content['calendar_at'] === null ? 'Belum memiliki tanggal' : escape(dashboardTime((int) $content['calendar_at'], $detail['timezone'])) ?></small></li><?php endforeach ?></ul>
         <?php endif ?>
         <?php if ($canManage): ?>
             <form class="campaign-link-form" method="post" action="<?= escape($detailAction) ?>">

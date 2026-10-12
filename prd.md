@@ -92,7 +92,7 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 
 - Setelah login admin sistem diarahkan ke kerangka admin; semua URL menu dilindungi autentikasi dan pemeriksaan role server. Hak akses perusahaan/peran lain tetap belum diimplementasikan pada tahap ini.
 - Sidebar dikelompokkan menjadi: Ruang kerja (Dashboard, Kalender konten, Kampanye); Editorial (Ide & draft konten, Studio AI, Aset media, Template konten, Persetujuan); Publikasi (Antrean & jadwal, Riwayat & kegagalan, Akun kanal); Organisasi (Perusahaan, Profil merek, Pengguna & hak akses); Laporan & sistem (Laporan & ekspor, Metrik engagement, Audit log, Pengaturan).
-- Pada tahap sidebar, menu mengarah ke placeholder yang hanya menampilkan judul dan pemberitahuan bahwa isi/fungsi menyusul. Dashboard, kalender, dan kampanye kemudian diimplementasikan sebagaimana bagian 5.3–5.5; menu lain tetap placeholder. Tidak ada statistik, koneksi, notifikasi, atau tindakan bisnis palsu.
+- Pada tahap sidebar, menu mengarah ke placeholder yang hanya menampilkan judul dan pemberitahuan bahwa isi/fungsi menyusul. Dashboard, kalender, kampanye, dan konten kemudian diimplementasikan sebagaimana bagian 5.3–5.6; menu lain tetap placeholder. Tidak ada statistik, koneksi, notifikasi, atau tindakan bisnis palsu.
 - Metrik engagement diberi label Fase 3, nonaktif, dan tidak menyediakan route aktif. Komentar/DM, iklan, dan fitur di luar PRD tidak ditambahkan.
 - Sidebar memiliki menu aktif, ikon lokal, identitas akun, logout POST+CSRF, dan tombol buka/tutup yang responsif. Navigasi tetap tersedia tanpa JavaScript; menu/section tidak dikenal ditolak, bukan diarahkan diam-diam ke menu lain.
 - Uji penerimaan: tamu/session kedaluwarsa tidak dapat masuk, login mengarah ke shell, semua menu aktif dapat dipilih dengan tepat satu penanda aktif, route fase lanjut/mutasi placeholder ditolak, logout berfungsi, serta tampilan Herd dan mobile tetap normal.
@@ -107,7 +107,7 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 - Semua panel memakai scope perusahaan yang sama dan satu snapshot database konsisten. Filter tidak dikenal/berbentuk tidak valid ditolak; nilai kosong memakai semua perusahaan hanya bila parameter tidak disertakan atau pilihan Semua perusahaan dipilih.
 - Halaman dapat digunakan tanpa JavaScript melalui form GET filter; layout responsif dan aset/navigasi tetap same-origin untuk Herd/shared hosting/VPS.
 - Hanya admin sistem dengan session aktif yang dapat mengakses dashboard gabungan. Filter adalah alat tampilan, bukan pengganti RBAC; admin perusahaan/editor/approver/viewer dan penugasan akses menyusul sebelum peran tersebut diaktifkan.
-- Schema awal dashboard menambahkan `companies`, `content_items` (company_id dan owner_id wajib), serta `social_accounts`; campaign/variant/approval/job publikasi menyusul melalui migrasi terpisah. Pembuatan dan penghapusan ide/brief tersedia melalui kalender (bagian 5.4); belum ada edit konten, koneksi akun, atau perubahan status Terbit. Publikasi nyata tetap memerlukan validasi dan konfirmasi API sesuai bagian 6.5.
+- Schema awal dashboard menambahkan `companies`, `content_items` (company_id dan owner_id wajib), serta `social_accounts`; campaign/variant/approval/job publikasi menyusul melalui migrasi terpisah. Pembuatan dan penghapusan ide/brief tersedia melalui kalender (bagian 5.4); edit Ide/Brief melalui halaman konten (bagian 5.6). Belum ada koneksi akun atau perubahan status Terbit. Publikasi nyata tetap memerlukan validasi dan konfirmasi API sesuai bagian 6.5.
 - Uji penerimaan mencakup data kosong, agregat tiga perusahaan, isolasi semua panel saat difilter, seluruh kategori status, waktu lokal, batas/urutan konten terbaru, escaping, foreign key perusahaan, dan migrasi berulang tanpa duplikasi atau kehilangan akun admin.
 
 ### 5.4 Kalender, tambah konten, dan ide peringatan otomatis
@@ -125,7 +125,7 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 - Aktivasi melalui POST kalender/CLI menetapkan admin aktif sebagai pemilik ide baru. Generator membuat satu Ide per perusahaan aktif/peringatan/tahun dengan rencana 09:00 zona perusahaan dan brief kurasi awal. Tidak memakai AI, tidak mengarang tema tahunan, tidak menyetujui/menjadwalkan publikasi. Semua perusahaan aktif mendapat ide, terlepas filter tampilan.
 - Generator idempoten dan transaksional dengan unique index perusahaan/peringatan/tahun. Proses ulang/paralel tidak menggandakan ide, tidak menimpa perubahan manusia, dan mengisi perusahaan aktif baru. Admin pemilik yang dinonaktifkan menyebabkan error eksplisit. Penjedaan menghentikan ide baru tanpa menghapus yang lama.
 - Otomatisasi berkelanjutan memerlukan cron `calendar:generate` atau cron `mail:work` yang turut menjalankannya untuk tahun berjalan Asia/Jakarta. Tanpa cron, ide dibuat hanya lewat tombol/CLI. UI menampilkan konfigurasi dan proses terakhir, tidak mengklaim scheduler terpasang. Tahun lain dapat dilengkapi melalui tombol atau argumen CLI.
-- Filter kampanye dan pilihan kampanye pada konten baru tersedia sebagaimana bagian 5.5. Jadwal per akun/platform, filter platform/pemilik, tampilan mingguan, edit konten/jadwal, hapus status selain Ide/Brief, AI generatif, dan publikasi belum tersedia pada tahap ini.
+- Filter kampanye dan pilihan kampanye pada konten baru tersedia sebagaimana bagian 5.5; edit Ide/Brief melalui bagian 5.6. Jadwal per akun/platform, filter platform/pemilik, tampilan mingguan, edit jadwal publikasi, hapus status selain Ide/Brief, AI generatif, dan publikasi belum tersedia pada tahap ini.
 - Uji penerimaan mencakup validasi/CSRF/autentikasi/anti-duplikasi tambah konten, klik tanggal dan fallback tanpa JavaScript, tanggal UTC/lokal/DST, konfirmasi dan batas status penghapusan, hitungan dashboard/kalender setelah hapus, pencegahan pembuatan ulang ide terhapus, peringatan bersumber, aktivasi/jeda, generator paralel/ulang, perusahaan/pemilik nonaktif, dan pelestarian perubahan manusia.
 
 ### 5.5 Pengelolaan kampanye
@@ -138,6 +138,14 @@ Hak akses dibatasi berdasarkan perusahaan dan akun yang ditugaskan. Perubahan st
 - Hitungan/detail kampanye mengabaikan konten yang dihapus, termasuk status Terbit. Arsip kampanye tetap dapat dilihat/filter di kalender. Pemindahan/pelepasan relasi, edit konten umum, AI kampanye, dan penjadwalan/publikasi otomatis belum tersedia.
 - Admin sistem aktif saja; semua mutasi POST+CSRF dan audit. Pembuatan memiliki token anti-duplikasi, edit/arsip memakai version check untuk menolak konflik tanpa menimpa perubahan admin lain. Form validasi HTTP 422 mempertahankan input ter-escape; filter invalid HTTP 400, action tidak dikenal HTTP 405.
 - Uji penerimaan: kosong, tambah/edit/replay, konflik versi, periode invalid, perusahaan/pemilik nonaktif, lintas perusahaan, CSRF, escaping, arsip mempertahankan riwayat/menolak perubahan, relasi konten baru/lama, filter kalender/kampanye, konten terhapus, migrasi tanpa duplikasi/kehilangan data.
+
+### 5.6 Ide & draft konten
+
+- Halaman konten tersedia untuk admin sistem aktif; daftar semua status termasuk tanpa tanggal, pencarian judul/brief (maksimal 200 karakter, wildcard dianggap literal), filter perusahaan/status/kampanye, dan paginasi 20 item.
+- Tambah memakai form dan validasi kalender yang sama. Detail memuat brief, pemilik, format, rencana/jadwal, asal ide otomatis, kampanye, serta tautan kalender dan kampanye.
+- Edit dibatasi server pada Ide/Brief di perusahaan aktif: judul, brief, format, status Ide/Brief, dan rencana lokal. Pemilik, perusahaan, kampanye, jadwal publikasi, dan identitas peringatan tetap. Kaitan baru dibuat melalui detail kampanye; kaitan arsip yang sudah ada tetap dipertahankan.
+- Migrasi 006 menambahkan versi konten. Setiap perubahan konten menaikkan versi, termasuk kaitan kampanye dan penghapusan. Edit dari form lama ditolak tanpa menimpa data; kesalahan validasi mempertahankan input dan versi yang diajukan.
+- Hapus memakai aturan soft-delete Ide/Brief dengan checkbox konfirmasi dan CSRF, menghilangkan konten dari daftar/kalender/kampanye/dashboard. Status tahap lanjut hanya dibaca; tidak ada AI, review, atau publikasi pada halaman ini.
 
 ## 6. Ruang lingkup fitur
 
